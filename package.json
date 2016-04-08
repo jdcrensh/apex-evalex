@@ -7,13 +7,14 @@
         "url": "https://github.com/jdcrensh/apex-evalex.git"
     },
     "scripts": {
-        "test": "node lib/run_tests.js"
+        "test": "node build"
     },
     "description": "apex-evalex-build",
     "dependencies": {
         "jsforce": "^1.6.0",
         "q": "^1.4.1",
         "lodash": "^4.6.1",
-        "restler": "^3.4.0"
+        "restler": "^3.4.0",
+        "sfdc-travisci-coveralls": "jdcrensh/sfdc-travisci-coveralls"
     }
 }

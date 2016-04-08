@@ -1,11 +1,6 @@
 # Apex EvalEx - Apex Expression Evaluator
 
-[![Build Status](https://travis-ci.org/jdcrensh/apex-evalex.svg?branch=master)](https://travis-ci.org/jdcrensh/apex-evalex) [![Coverage Status](https://coveralls.io/repos/github/jdcrensh/apex-evalex/badge.svg?branch=master)](https://coveralls.io/github/jdcrensh/apex-evalex?branch=master)
-
-<a href="https://githubsfdeploy.herokuapp.com?owner=jdcrensh&repo=apex-evalex">
-  <img alt="Deploy to Salesforce"
-       src="https://raw.githubusercontent.com/afawcett/githubsfdeploy/master/src/main/webapp/resources/img/deploy.png">
-</a>
+[![deploy to salesforce](https://img.shields.io/badge/salesforce-deploy-blue.svg)](https://githubsfdeploy.herokuapp.com) [![Build Status](https://travis-ci.org/jdcrensh/apex-evalex.svg?branch=master)](https://travis-ci.org/jdcrensh/apex-evalex) [![Coverage Status](https://coveralls.io/repos/github/jdcrensh/apex-evalex/badge.svg?branch=master)](https://coveralls.io/github/jdcrensh/apex-evalex?branch=master)
 
 ### Introduction
 
