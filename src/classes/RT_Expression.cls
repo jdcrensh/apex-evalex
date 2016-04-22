@@ -45,28 +45,28 @@ public class RT_Expression implements IExpression {
 		Set<String> getDeclaredOperators();
 		Set<String> getDeclaredFunctions();
 	}
-	
+
 	public static final Decimal ZERO = 0, ONE = 1, MAX_INTEGER, MIN_INTEGER;
-	
+
 	static {
 		MAX_INTEGER = Math.pow(2, 31).intValue();
 		MIN_INTEGER = MAX_INTEGER + 1;
 	}
-	
+
 	/**
 	 * All defined operators with name and implementation
 	 */
 	private static Map<String, Operator> operators;
-	
+
 	/**
 	 * All defined functions with name and implementation
 	 */
 	private static Map<String, Function> functions;
-	
+
 	static {
 		operators = new Map<String, Operator>();
 		functions = new Map<String, Function>();
-		
+
 		// default operators
 		addOperator(new AddOperator('+', 20, Associability.LEFT));
 		addOperator(new SubtractOperator('-', 20, Associability.LEFT));
@@ -84,7 +84,7 @@ public class RT_Expression implements IExpression {
 		addOperator(new EqualOperator('==', 7, Associability.RIGHT));
 		addOperator(new NotEqualOperator('!=', 7, Associability.RIGHT));
 		addOperator(new NotEqualOperator('<>', 7, Associability.RIGHT));
-		
+
 		// default functions
 		addFunction(new NotFunction('NOT', 1));
 		addFunction(new IfFunction('IF', 3));
@@ -110,27 +110,27 @@ public class RT_Expression implements IExpression {
 		addFunction(new CeilingFunction('CEILING', 1));
 		addFunction(new SqrtFunction('SQRT', 1));
 	}
-	
+
 	/**
 	 * The MathContext to use for calculations
 	 */
 	public MathContext mc;
-	
+
 	/**
 	 * The original infix expression
 	 */
 	private String expression;
-	
+
 	/**
 	 * The cached RPN (Reverse Polish Notation) of the expression
 	 */
 	private List<String> rpn;
-	
+
 	/**
 	 * All defined variables with name and value
 	 */
 	private Map<String, Decimal> variables = new Map<String, Decimal>();
-	
+
 	/**
 	 * Creates a new expression instance from an expression string with a given
 	 * default match context of MathContext#DECIMAL32.
@@ -140,7 +140,7 @@ public class RT_Expression implements IExpression {
 	public RT_Expression(String expression) {
 		this(expression, new MathContext(7, RoundingMode.HALF_EVEN));
 	}
-	
+
 	/**
 	 * Creates a new expression instance from an expression string with a given
 	 * default match context.
@@ -150,12 +150,12 @@ public class RT_Expression implements IExpression {
 	public RT_Expression(String expression, MathContext mc) {
 		this.expression = expression;
 		this.mc = mc;
-		
+
 		variables.put('PI', Math.PI);
 		variables.put('TRUE', ONE);
 		variables.put('FALSE', ZERO);
 	}
-	
+
 	/**
 	 * Implementation of the Shunting Yard algorithm to transform an
 	 * infix expression to a RPN expression.
@@ -167,9 +167,9 @@ public class RT_Expression implements IExpression {
 	private List<String> shuntingYard(String expression) {
 		List<String> outputQueue = new List<String>();
 		RT_Stack stack = new RT_Stack();
-		
+
 		Tokenizer tokenizer = new Tokenizer(expression, this);
-		
+
 		String lastFunction;
 		String previousToken;
 		while (tokenizer.hasNext()) {
@@ -250,7 +250,7 @@ public class RT_Expression implements IExpression {
 		}
 		return outputQueue;
 	}
-	
+
 	/**
 	 * Evaluates the expression.
 	 *
@@ -258,7 +258,7 @@ public class RT_Expression implements IExpression {
 	 */
 	public Decimal eval() {
 		RT_Stack stack = new RT_Stack();
-		
+
 		for (String token : getRPN()) {
 			if (operators.containsKey(token)) {
 				Decimal v1 = (Decimal) stack.pop();
@@ -287,7 +287,7 @@ public class RT_Expression implements IExpression {
 				if (!f.numParamsVaries() && p.size() != f.getNumParams()) {
 					throw new ExpressionException('Function ' + token + ' expected ' + f.getNumParams() + ' parameters, got ' + p.size());
 				}
-				
+
 				stack.push(f.eval(p, this.mc));
 			}
 			else if (token == '(') {
@@ -299,7 +299,7 @@ public class RT_Expression implements IExpression {
 		}
 		return ((Decimal) stack.pop()).stripTrailingZeros();
 	}
-	
+
 	/**
 	 * Sets the precision for expression evaluation
 	 * @param precision the new precision
@@ -309,7 +309,7 @@ public class RT_Expression implements IExpression {
 		this.mc.precision = precision;
 		return this;
 	}
-	
+
 	/**
 	 * Sets the rounding mode for expression evaluation
 	 *
@@ -320,7 +320,7 @@ public class RT_Expression implements IExpression {
 		this.mc.roundingMode = roundingMode;
 		return this;
 	}
-	
+
 	/**
 	 * Adds an operator to the list of supported operators
 	 *
@@ -330,7 +330,7 @@ public class RT_Expression implements IExpression {
 	public static Operator addOperator(Operator operator) {
 		return operators.put(operator.getOper(), operator);
 	}
-	
+
 	/**
 	 * Adds a function to the list of supported functions
 	 *
@@ -340,7 +340,7 @@ public class RT_Expression implements IExpression {
 	public static Function addFunction(Function function) {
 		return functions.put(function.getName().toUpperCase(), function);
 	}
-	
+
 	/**
 	 * Sets a variable value
 	 *
@@ -352,7 +352,7 @@ public class RT_Expression implements IExpression {
 		variables.put(variable.toUpperCase(), value);
 		return this;
 	}
-	
+
 	/**
 	 * Sets a variable value.
 	 *
@@ -370,7 +370,7 @@ public class RT_Expression implements IExpression {
 		}
 		return this;
 	}
-	
+
 	/**
 	 * Sets a variable value.
 	 *
@@ -381,7 +381,7 @@ public class RT_Expression implements IExpression {
 	public RT_Expression with(String variable, Decimal value) {
 		return setVariable(variable.toUpperCase(), value);
 	}
-	
+
 	/**
 	 * Sets a variable value.
 	 *
@@ -392,7 +392,7 @@ public class RT_Expression implements IExpression {
 	public RT_Expression with(String variable, String value) {
 		return setVariable(variable.toUpperCase(), value);
 	}
-	
+
 	/**
 	 * Get an iterator for this expression, allows iterating over an expression
 	 * token by token.
@@ -402,7 +402,7 @@ public class RT_Expression implements IExpression {
 	public Iterator<String> getExpressionTokenizer() {
 		return new Tokenizer(this.expression, this);
 	}
-	
+
 	/**
 	 * Cached access to the RPN notation of this expression, ensures only one
 	 * calculation of the RPN per expression instance. If no cached instance
@@ -417,7 +417,7 @@ public class RT_Expression implements IExpression {
 		}
 		return rpn;
 	}
-	
+
 	/**
 	 * Check that the expression have enough numbers and variables to fit the
 	 * requirements of the operators and functions, also check
@@ -470,7 +470,7 @@ public class RT_Expression implements IExpression {
 			throw new ExpressionException('Empty expression');
 		}
 	}
-	
+
 	/**
 	 * Get a string representation of the RPN (Reverse Polish Notation) for this
 	 * expression.
@@ -487,7 +487,7 @@ public class RT_Expression implements IExpression {
 		}
 		return result;
 	}
-	
+
 	/**
 	 * Is the string a number?
 	 *
@@ -515,7 +515,7 @@ public class RT_Expression implements IExpression {
 		}
 		return true;
 	}
-	
+
 	/**
 	 * Converts an angle measured in degrees to an approximately
 	 * equivalent angle measured in radians. The conversion from
@@ -527,7 +527,7 @@ public class RT_Expression implements IExpression {
 	private static Decimal toRadians(Decimal angdeg) {
 		return angdeg / 180.0 * Math.PI;
 	}
-	
+
 	/**
 	 * Converts an angle measured in radians to an approximately
 	 * equivalent angle measured in degrees. The conversion from
@@ -540,14 +540,14 @@ public class RT_Expression implements IExpression {
 	private static Decimal toDegrees(Decimal angrad) {
 		return angrad * 180.0 / Math.PI;
 	}
-	
+
 	/**
 	 * Returns the string of a character at `ind` in `str`
 	 */
 	private static String charAt(String str, Integer ind) {
 		return String.fromCharArray(new List<Integer> {str.charAt(ind)});
 	}
-	
+
 	/**
 	 * Round a Decimal given a MathContext
 	 */
@@ -569,7 +569,7 @@ public class RT_Expression implements IExpression {
 		System.debug('rounded=' + rounded);
 		return rounded;
 	}
-	
+
 	/**
 	 * Exposing declared variables in the expression
 	 * @return declared variables
@@ -577,7 +577,7 @@ public class RT_Expression implements IExpression {
 	public Set<String> getDeclaredVariables() {
 		return variables.keySet();
 	}
-	
+
 	/**
 	 * Exposing declared operators in the expression
 	 * @return declared operators
@@ -585,7 +585,7 @@ public class RT_Expression implements IExpression {
 	public Set<String> getDeclaredOperators() {
 		return operators.keySet();
 	}
-	
+
 	/**
 	 * Exposing declared functions
 	 * @return declared functions
@@ -593,25 +593,25 @@ public class RT_Expression implements IExpression {
 	public Set<String> getDeclaredFunctions() {
 		return functions.keySet();
 	}
-	
+
 	/**
 	 * Abstract definition of a supported expression function. A function is
 	 * defined by a name, the number of parameters and the actual processing
 	 * implementation.
 	 */
 	public abstract class Function {
-	
+
 		/**
 		 * Name of this function.
 		 */
 		protected String name;
-		
+
 		/**
 		 * Number of parameters expected for this function.
 		 * `-1` denotes a variable number of parameters.
 		 */
 		protected Integer numParams;
-		
+
 		/**
 		 * Creates a new function with given name and parameter count
 		 * @param name name of the function
@@ -622,23 +622,23 @@ public class RT_Expression implements IExpression {
 			this.name = name.toUpperCase();
 			this.numParams = numParams;
 		}
-		
+
 		public Function() {
 			throw new UnsupportedOperationException();
 		}
-		
+
 		public String getName() {
 			return name;
 		}
-		
+
 		public Integer getNumParams() {
 			return numParams;
 		}
-		
+
 		public Boolean numParamsVaries() {
 			return numParams < 0;
 		}
-		
+
 		/**
 		 * Implementation for this function.
 		 *
@@ -647,7 +647,7 @@ public class RT_Expression implements IExpression {
 		 */
 		public abstract Decimal eval(List<Decimal> parameters, MathContext mc);
 	}
-	
+
 	/**
 	 * Abstract definition of a supported operator. An operator is defined by
 	 * its name (pattern), precedence, and if it is left or right associative.
@@ -665,7 +665,7 @@ public class RT_Expression implements IExpression {
 		 * Operator is left associative.
 		 */
 		protected Associability assoc;
-		
+
 		/**
 		 * Creates a new operator.
 		 *
@@ -678,19 +678,19 @@ public class RT_Expression implements IExpression {
 			this.precedence = precedence;
 			this.assoc = assoc;
 		}
-		
+
 		public String getOper() {
 			return oper;
 		}
-		
+
 		public Integer getPrecedence() {
 			return precedence;
 		}
-		
+
 		public Boolean isLeftAssoc() {
 			return assoc == Associability.LEFT;
 		}
-		
+
 		/**
 		 * Implementation for this operator
 		 *
@@ -700,20 +700,20 @@ public class RT_Expression implements IExpression {
 		 */
 		public abstract Decimal eval(Decimal v1, Decimal v2, MathContext mc);
 	}
-	
+
 	/**
 	 * Expression tokenizer that allows to iterate over a String
 	 * expression token by token. Blank characters will be skipped.
 	 */
 	public class Tokenizer implements Iterator<String> {
-	
+
 		private RT_Expression expr;
-		
+
 		/**
 		 * Actual position in expression string.
 		 */
 		private Integer pos = 0;
-		
+
 		/**
 		 * The original input expression.
 		 */
@@ -722,7 +722,7 @@ public class RT_Expression implements IExpression {
 		 * The previous token or `null` if none.
 		 */
 		private String previousToken;
-		
+
 		/**
 		 * Creates a new tokenizer for an expression.
 		 *
@@ -732,11 +732,11 @@ public class RT_Expression implements IExpression {
 			this.expr = expr;
 			this.input = input.trim();
 		}
-		
+
 		public Boolean hasNext() {
 			return pos < input.length();
 		}
-		
+
 		/**
 		 * Peek at the next character, without advancing the iterator.
 		 *
@@ -750,7 +750,7 @@ public class RT_Expression implements IExpression {
 				return '';
 			}
 		}
-		
+
 		public String next() {
 			String token = '';
 			if (pos >= input.length()) {
@@ -810,7 +810,7 @@ public class RT_Expression implements IExpression {
 			}
 			return previousToken = token;
 		}
-		
+
 		/**
 		 * Get the actual character position in the string.
 		 *
@@ -820,25 +820,25 @@ public class RT_Expression implements IExpression {
 			return pos;
 		}
 	}
-	
+
 	/**
 	 * Expression assoc
 	 */
 	public enum Associability { LEFT, RIGHT }
-	
+
 	/**
 	 * MathContext container
 	 */
 	public class MathContext {
 		public Integer precision;
 		public RoundingMode roundingMode;
-		
+
 		public MathContext(Integer precision, RoundingMode roundingMode) {
 			this.precision = precision;
 			this.roundingMode = roundingMode;
 		}
 	}
-	
+
 	public class AddOperator extends Operator {
 		public AddOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -847,7 +847,7 @@ public class RT_Expression implements IExpression {
 			return round(v1 + v2, mc);
 		}
 	}
-	
+
 	public class SubtractOperator extends Operator {
 		public SubtractOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -856,7 +856,7 @@ public class RT_Expression implements IExpression {
 			return round(v1 - v2, mc);
 		}
 	}
-	
+
 	public class MultiplyOperator extends Operator {
 		public MultiplyOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -865,7 +865,7 @@ public class RT_Expression implements IExpression {
 			return round(v1 * v2, mc);
 		}
 	}
-	
+
 	public class DivideOperator extends Operator {
 		public DivideOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -874,7 +874,7 @@ public class RT_Expression implements IExpression {
 			return v1.divide(v2, mc.precision, mc.roundingMode);
 		}
 	}
-	
+
 	public class ModOperator extends Operator {
 		public ModOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -884,7 +884,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class PowOperator extends Operator {
 		public PowOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -893,7 +893,7 @@ public class RT_Expression implements IExpression {
 			return round(Decimal.valueOf(Math.pow(v1.doubleValue(), v2.doubleValue())), mc);
 		}
 	}
-	
+
 	public class AndOperator extends Operator {
 		public AndOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -904,7 +904,7 @@ public class RT_Expression implements IExpression {
 			return b1 && b2 ? ONE : ZERO;
 		}
 	}
-	
+
 	public class OrOperator extends Operator {
 		public OrOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -915,7 +915,7 @@ public class RT_Expression implements IExpression {
 			return b1 || b2 ? ONE : ZERO;
 		}
 	}
-	
+
 	public class GreaterOperator extends Operator {
 		public GreaterOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -924,7 +924,7 @@ public class RT_Expression implements IExpression {
 			return v1 > v2 ? ONE : ZERO;
 		}
 	}
-	
+
 	public class GreaterOrEqualOperator extends Operator {
 		public GreaterOrEqualOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -933,7 +933,7 @@ public class RT_Expression implements IExpression {
 			return v1 >= v2 ? ONE : ZERO;
 		}
 	}
-	
+
 	public class LessOperator extends Operator {
 		public LessOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -942,7 +942,7 @@ public class RT_Expression implements IExpression {
 			return v1 < v2 ? ONE : ZERO;
 		}
 	}
-	
+
 	public class LessEqualOperator extends Operator {
 		public LessEqualOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -951,7 +951,7 @@ public class RT_Expression implements IExpression {
 			return v1 <= v2 ? ONE : ZERO;
 		}
 	}
-	
+
 	public class EqualOperator extends Operator {
 		public EqualOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -960,7 +960,7 @@ public class RT_Expression implements IExpression {
 			return v1 == v2 ? ONE : ZERO;
 		}
 	}
-	
+
 	public class NotEqualOperator extends Operator {
 		public NotEqualOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
@@ -969,7 +969,7 @@ public class RT_Expression implements IExpression {
 			return v1 != v2 ? ONE : ZERO;
 		}
 	}
-	
+
 	public class NotFunction extends Function {
 		public NotFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -980,7 +980,7 @@ public class RT_Expression implements IExpression {
 			return isZero ? ONE : ZERO;
 		}
 	}
-	
+
 	public class IfFunction extends Function {
 		public IfFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -991,7 +991,7 @@ public class RT_Expression implements IExpression {
 			return isTrue ? parameters.get(1) : parameters.get(2);
 		}
 	}
-	
+
 	public class RandomFunction extends Function {
 		public RandomFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1002,7 +1002,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class SinFunction extends Function {
 		public SinFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1013,7 +1013,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class CosFunction extends Function {
 		public CosFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1024,7 +1024,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class TanFunction extends Function {
 		public TanFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1035,7 +1035,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class AsinFunction extends Function {
 		public AsinFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1046,7 +1046,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class AcosFunction extends Function {
 		public AcosFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1057,7 +1057,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class AtanFunction extends Function {
 		public AtanFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1068,7 +1068,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class SinhFunction extends Function {
 		public SinhFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1079,7 +1079,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class CoshFunction extends Function {
 		public CoshFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1090,7 +1090,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class TanhFunction extends Function {
 		public TanhFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1101,7 +1101,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class RadFunction extends Function {
 		public RadFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1112,7 +1112,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class DegFunction extends Function {
 		public DegFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1123,7 +1123,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class MaxFunction extends Function {
 		public MaxFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1139,7 +1139,7 @@ public class RT_Expression implements IExpression {
 			return max;
 		}
 	}
-	
+
 	public class MinFunction extends Function {
 		public MinFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1155,7 +1155,7 @@ public class RT_Expression implements IExpression {
 			return min;
 		}
 	}
-	
+
 	public class AbsFunction extends Function {
 		public AbsFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1165,7 +1165,7 @@ public class RT_Expression implements IExpression {
 			return round(parameters.get(0).abs(), mc);
 		}
 	}
-	
+
 	public class LogFunction extends Function {
 		public LogFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1176,7 +1176,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class Log10Function extends Function {
 		public Log10Function(String name, Integer numParams) {
 			super(name, numParams);
@@ -1187,7 +1187,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	public class RoundFunction extends Function {
 		public RoundFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1199,7 +1199,7 @@ public class RT_Expression implements IExpression {
 			return d.setScale(scale, mc.roundingMode);
 		}
 	}
-	
+
 	public class FloorFunction extends Function {
 		public FloorFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1210,7 +1210,7 @@ public class RT_Expression implements IExpression {
 			return d.setScale(0, RoundingMode.FLOOR);
 		}
 	}
-	
+
 	public class CeilingFunction extends Function {
 		public CeilingFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1221,7 +1221,7 @@ public class RT_Expression implements IExpression {
 			return d.setScale(0, RoundingMode.CEILING);
 		}
 	}
-	
+
 	public class SqrtFunction extends Function {
 		public SqrtFunction(String name, Integer numParams) {
 			super(name, numParams);
@@ -1232,7 +1232,7 @@ public class RT_Expression implements IExpression {
 			return round(d, mc);
 		}
 	}
-	
+
 	private static void verifyFunctionParams(String name, Integer expected, Integer actual) {
 		String msg;
 		if (expected == 0 && actual > 0) {
@@ -1248,12 +1248,12 @@ public class RT_Expression implements IExpression {
 			throw new ExpressionException(msg);
 		}
 	}
-	
+
 	/**
 	 * Expression evaluator exceptions
 	 */
 	public class ExpressionException extends Exception {}
-	
+
 	/**
 	 * UnsupportedOperationException
 	 */
