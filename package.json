@@ -1,20 +1,14 @@
 {
-    "name": "apex-evalex-build",
-    "version": "0.0.1",
-    "license": "ISC",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/jdcrensh/apex-evalex.git"
-    },
-    "scripts": {
-        "test": "node build"
-    },
-    "description": "apex-evalex-build",
-    "dependencies": {
-        "jsforce": "^1.6.0",
-        "q": "^1.4.1",
-        "lodash": "^4.6.1",
-        "restler": "^3.4.0",
-        "sfdc-travisci-coveralls": "jdcrensh/sfdc-travisci-coveralls"
-    }
+  "name": "apex-evalex",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "repository": "jdcrensh/apex-evalex",
+  "scripts": {
+    "test": "node build"
+  },
+  "description": "An expression evaluator for Apex, allowing evaluation of simple mathematical and boolean expressions",
+  "dependencies": {
+    "sfdc-travisci-coveralls": "^0.0.3"
+  }
 }
