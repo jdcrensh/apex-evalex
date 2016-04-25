@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "license": "MIT",
-  "repository": "jdcrensh/apex-evalex",
+  "repository": "redteal/apex-evalex",
   "scripts": {
     "test": "node build"
   },
