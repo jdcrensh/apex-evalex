@@ -5,10 +5,10 @@
   "license": "MIT",
   "repository": "redteal/apex-evalex",
   "scripts": {
-    "test": "node build"
+    "test": "sfdc-travisci-coveralls"
   },
   "description": "An expression evaluator for Apex, allowing evaluation of simple mathematical and boolean expressions",
-  "dependencies": {
-    "sfdc-travisci-coveralls": "^0.0.3"
+  "devDependencies": {
+    "sfdc-travisci-coveralls": "^0.1.0"
   }
 }
