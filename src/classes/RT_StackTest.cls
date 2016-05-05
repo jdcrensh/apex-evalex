@@ -54,4 +54,9 @@
 		}
 		catch (Exception e) {}
 	}
+
+	@isTest static void testEmptyStackPeek() {
+		RT_Stack s = new RT_Stack();
+		System.assertEquals(null, s.peek());
+	}
 }
