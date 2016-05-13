@@ -67,12 +67,12 @@
 	}
 	
 	@isTest static void testConstants() {
-		System.assertEquals('1', new RT_Expression('TRUE!=FALSE').eval() + '');
-		System.assertEquals('0', new RT_Expression('TRUE==2').eval() + '');
-		System.assertEquals('1', new RT_Expression('NOT(TRUE)==FALSE').eval() + '');
-		System.assertEquals('1', new RT_Expression('NOT(FALSE)==TRUE').eval() + '');
-		System.assertEquals('0', new RT_Expression('TRUE && FALSE').eval() + '');
-		System.assertEquals('1', new RT_Expression('TRUE || FALSE').eval() + '');
+		System.assertEquals(true, new RT_Expression('TRUE!=FALSE').evalBool());
+		System.assertEquals(false, new RT_Expression('TRUE==2').evalBool());
+		System.assertEquals(true, new RT_Expression('NOT(TRUE)==FALSE').evalBool());
+		System.assertEquals(true, new RT_Expression('NOT(FALSE)==TRUE').evalBool());
+		System.assertEquals(false, new RT_Expression('TRUE && FALSE').evalBool());
+		System.assertEquals(true, new RT_Expression('TRUE || FALSE').evalBool());
 	}
 	
 	@isTest static void testIf() {
@@ -96,7 +96,7 @@
 		System.assertEquals(expression.eval().intValue(), 20);
 		
 		expression = new RT_Expression('a+B');
-		expression.setVariable('A', 'c+d');
+		expression.setVariable('A', 10);
 		expression.setVariable('b', 10);
 		expression.setVariable('C', 5);
 		expression.setVariable('d', 5);
@@ -114,9 +114,10 @@
 		public SumFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal apply(List<Decimal> parameters, RT_Expression.MathContext mc) {
+		public override Object apply(List<Object> parameters, RT_Expression.MathContext mc) {
 			Decimal value = null;
-			for (Decimal d : parameters) {
+			for (Object parameter : parameters) {
+				Decimal d = (Decimal) parameter;
 				value = value == null ? d : value + d;
 			}
 			return value;
@@ -130,8 +131,9 @@
 		public BitRightOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal apply(Decimal v1, Decimal v2, RT_Expression.MathContext mc) {
-			return v1.longValue() >> v2.longValue();
+		public override Object apply(Object v1, Object v2, RT_Expression.MathContext mc) {
+			Decimal d1 = (Decimal) v1, d2 = (Decimal) v2;
+			return d1.longValue() >> d2.longValue();
 		}
 	}
 	
@@ -145,13 +147,13 @@
 		public AvgFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal apply(List<Decimal> parameters, RT_Expression.MathContext mc) {
+		public override Object apply(List<Object> parameters, RT_Expression.MathContext mc) {
 			if (numParams > -1 && numParams != parameters.size()) {
 				throw new RT_Expression.ExpressionException('AVG function requires ' + numParams + ' parameters');
 			}
 			Decimal avg = 0;
-			for (Decimal parameter : parameters) {
-				avg += parameter;
+			for (Object parameter : parameters) {
+				avg += (Decimal) parameter;
 			}
 			return avg.divide(Decimal.valueOf(parameters.size()), mc.precision, mc.roundingMode);
 		}
@@ -465,7 +467,7 @@
 		public NullOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal apply(Decimal v1, Decimal v2, RT_Expression.MathContext mc) {
+		public override Object apply(Object v1, Object v2, RT_Expression.MathContext mc) {
 			return null;
 		}
 	}
@@ -492,7 +494,7 @@
 		public NullFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal apply(List<Decimal> parameters, RT_Expression.MathContext mc) {
+		public override Object apply(List<Object> parameters, RT_Expression.MathContext mc) {
 			return null;
 		}
 	}
@@ -520,13 +522,12 @@
 		e.with('y', y);
 		e.with('z', z);
 		
-		System.assertEquals('34', e.eval() + '');
+		System.assertEquals(34, e.eval());
 	}
 	
 	@isTest static void testReplacements() {
-		RT_Expression e = new RT_Expression('3+a+aa+aaa').with('a', '1*x')
-		.with('aa', '2*x').with('aaa', '3*x').with('x', '2');
-		System.assertEquals('15', e.eval() + '');
+		RT_Expression e = new RT_Expression('3+a+aa+aaa').with('a', '1*x').with('aa', '2*x').with('aaa', '3*x').with('x', '2');
+		System.assertEquals(15, e.eval());
 	}
 	
 	/* TestRPN.java
@@ -1004,8 +1005,8 @@
 	@isTest static void testNullSubstitution() {
 		RT_Expression e = new RT_Expression('x+y');
 		
-		System.assertEquals('1', e.with('x', (Decimal) null).with('y', '1').eval().toPlainString());
-		System.assertEquals('0', e.with('y', (Decimal) null).eval().toPlainString());
+		System.assertEquals('1', e.with('x', null).with('y', '1').eval().toPlainString());
+		System.assertEquals('0', e.with('y', null).eval().toPlainString());
 		System.assertEquals('1', e.with('x', '1').eval().toPlainString());
 	}
 	
