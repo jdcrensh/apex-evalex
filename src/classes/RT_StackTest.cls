@@ -2,61 +2,81 @@
 
 	@isTest static void testNewStackIsEmpty() {
 		RT_Stack s = new RT_Stack();
-		System.assert(s.isEmpty());
+		System.assert(s.empty());
 		System.assertEquals(0, s.size());
 	}
-
+	
 	@isTest static void testPushesToEmptyStack() {
 		RT_Stack s = new RT_Stack();
 		Integer numberOfPushes = 6;
+		Object o;
 		for (Integer i = 0; i < numberOfPushes; i++) {
-			s.push('zzz');
+			System.assertEquals(o = 'foo', s.push(o));
 		}
-		System.assertEquals(false, s.isEmpty());
+		System.assertEquals(false, s.empty());
 		System.assertEquals(numberOfPushes, s.size());
 	}
-
+	
 	@isTest static void testPushThenPop() {
 		RT_Stack s = new RT_Stack();
-		String message = 'hello';
-		s.push(message);
-		System.assertEquals(message, s.pop());
+		Object o = 'foo';
+		System.assertEquals(o, s.push(o));
+		System.assertEquals(o, s.pop());
 	}
-
+	
 	@isTest static void testPushThenPeek() {
 		RT_Stack s = new RT_Stack();
-		String message = 'hello';
-		s.push(message);
+		Object o = 'foo';
+		System.assertEquals(o, s.push(o));
 		Integer size = s.size();
-		System.assertEquals(message, s.peek());
+		System.assertEquals(o, s.peek());
 		System.assertEquals(size, s.size());
 	}
-
-	@isTest static void testPoppingDownToEmpty() {
+	
+	@isTest static void testPopToEmpty() {
 		RT_Stack s = new RT_Stack();
 		Integer numberOfPushes = (Integer)(Math.random() * 20 + 1);
+		Object o;
 		for (Integer i = 0; i < numberOfPushes; i++) {
-			s.push('zzz');
+			System.assertEquals(o = 'foo', s.push(o));
 		}
 		for (Integer i = 0; i < numberOfPushes; i++) {
-			s.pop();
+			System.assertEquals('foo', s.pop());
 		}
-		System.assert(s.isEmpty());
+		System.assert(s.empty());
 		System.assertEquals(0, s.size());
 	}
-
-	@isTest static void testPopOnEmptyStack() {
+	
+	@isTest static void testPopEmptyStackThrows() {
 		RT_Stack s = new RT_Stack();
-		System.assert(s.isEmpty());
 		try {
 			s.pop();
 			System.assert(false);
 		}
-		catch (Exception e) {}
+		catch (RT_Stack.EmptyStackException e) {}
 	}
-
-	@isTest static void testEmptyStackPeek() {
+	
+	@isTest static void testPeekEmptyStackThrows() {
 		RT_Stack s = new RT_Stack();
-		System.assertEquals(null, s.peek());
+		try {
+			s.peek();
+			System.assert(false);
+		}
+		catch (RT_Stack.EmptyStackException e) {}
+	}
+	
+	@isTest static void testSearch() {
+		RT_Stack s = new RT_Stack();
+		s.push(null);
+		s.push('foo');
+		s.push('bar');
+		s.push(null);
+		s.push('foo');
+		s.push('bar');
+		System.assertEquals(6, s.size());
+		System.assertEquals(1, s.search('bar'));
+		System.assertEquals(2, s.search('foo'));
+		System.assertEquals(3, s.search(null));
+		System.assertEquals(-1, s.search('qux'));
 	}
 }

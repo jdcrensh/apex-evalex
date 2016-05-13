@@ -1,15 +1,14 @@
-@isTest
-private class RT_ExpressionTest {
+@isTest class RT_ExpressionTest {
 
 	/* TestBooleans.java
 	 */
 	
 	@isTest static void testAndTokenizer() {
 		RT_Expression e = new RT_Expression('1&&0');
-		Iterator<String> it = e.getExpressionTokenizer();
-		System.assertEquals('1', it.next());
-		System.assertEquals('&&', it.next());
-		System.assertEquals('0', it.next());
+		Iterator<RT_Expression.Token> it = e.getExpressionTokenizer();
+		System.assertEquals('1', it.next().text);
+		System.assertEquals('&&', it.next().text);
+		System.assertEquals('0', it.next().text);
 	}
 	
 	@isTest static void testAndRPN() {
@@ -17,10 +16,10 @@ private class RT_ExpressionTest {
 	}
 	
 	@isTest static void testAndEval() {
-		System.assertEquals('0', new RT_Expression('1&&0').eval() + '');
-		System.assertEquals('1', new RT_Expression('1&&1').eval() + '');
-		System.assertEquals('0', new RT_Expression('0&&0').eval() + '');
-		System.assertEquals('0', new RT_Expression('0&&1').eval() + '');
+		System.assertEquals(false, new RT_Expression('1&&0').evalBool());
+		System.assertEquals(true, new RT_Expression('1&&1').evalBool());
+		System.assertEquals(false, new RT_Expression('0&&0').evalBool());
+		System.assertEquals(false, new RT_Expression('0&&1').evalBool());
 	}
 	
 	@isTest static void testOrEval() {
@@ -115,7 +114,7 @@ private class RT_ExpressionTest {
 		public SumFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, RT_Expression.MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, RT_Expression.MathContext mc) {
 			Decimal value = null;
 			for (Decimal d : parameters) {
 				value = value == null ? d : value + d;
@@ -131,7 +130,7 @@ private class RT_ExpressionTest {
 		public BitRightOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, RT_Expression.MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, RT_Expression.MathContext mc) {
 			return v1.longValue() >> v2.longValue();
 		}
 	}
@@ -146,7 +145,7 @@ private class RT_ExpressionTest {
 		public AvgFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, RT_Expression.MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, RT_Expression.MathContext mc) {
 			if (numParams > -1 && numParams != parameters.size()) {
 				throw new RT_Expression.ExpressionException('AVG function requires ' + numParams + ' parameters');
 			}
@@ -173,6 +172,12 @@ private class RT_ExpressionTest {
 	/* TestEval.java
 	 */
 	
+	@isTest static void testUnary() {
+		System.assertEquals('2', new RT_Expression('-3+5').eval().toPlainString());
+		System.assertEquals('-30', new RT_Expression('-5+(-25)').eval().toPlainString());
+		System.assertEquals('125', new RT_Expression('-5*(-25)').eval().toPlainString());
+	}
+	
 	@isTest static void testInvalidExpressions1() {
 		String err = '';
 		try {
@@ -187,7 +192,7 @@ private class RT_ExpressionTest {
 	}
 	
 	@isTest static void testInvalidExpressions2() {
-		String err = '';
+		String err;
 		try {
 			RT_Expression expression = new RT_Expression('(12)(18)');
 			expression.eval();
@@ -200,7 +205,7 @@ private class RT_ExpressionTest {
 	}
 	
 	@isTest static void testInvalidExpressions3() {
-		String err = '';
+		String err;
 		try {
 			RT_Expression expression = new RT_Expression('12 + * 18');
 			expression.eval();
@@ -213,7 +218,7 @@ private class RT_ExpressionTest {
 	}
 	
 	@isTest static void testInvalidExpressions4() {
-		String err = '';
+		String err;
 		try {
 			RT_Expression expression = new RT_Expression('');
 			expression.eval();
@@ -225,8 +230,13 @@ private class RT_ExpressionTest {
 		System.assertEquals('Empty expression', err);
 	}
 	
+	@isTest static void testInvalidExpressions5() {
+		RT_Expression expression = new RT_Expression('');
+		System.assert(expression.evalBool());
+	}
+	
 	@isTest static void testWrongBrackets1() {
-		String err = '';
+		String err;
 		try {
 			RT_Expression expression = new RT_Expression('2*3(5*3)');
 			expression.eval();
@@ -238,7 +248,7 @@ private class RT_ExpressionTest {
 	}
 	
 	@isTest static void testWrongBrackets2() {
-		String err = '';
+		String err;
 		try {
 			RT_Expression expression = new RT_Expression('2*(3((5*3)))');
 			expression.eval();
@@ -258,7 +268,7 @@ private class RT_ExpressionTest {
 		System.assertEquals('12', new RT_Expression('(1+2)*((1+2)+1)').eval().toPlainString());
 	}
 	
-	@isTest static void testUnknow1() {
+	@isTest static void testUnknown1() {
 		try {
 			new RT_Expression('7#9').eval().toPlainString();
 			System.assert(false);
@@ -266,7 +276,7 @@ private class RT_ExpressionTest {
 		catch (RT_Expression.ExpressionException expected) {}
 	}
 	
-	@isTest static void testUnknow2() {
+	@isTest static void testUnknown2() {
 		try {
 			new RT_Expression('123.6*-9.8-7#9').eval().toPlainString();
 			System.assert(false);
@@ -312,7 +322,7 @@ private class RT_ExpressionTest {
 	}
 	
 	@isTest static void testExpectedParameterNumbers() {
-		String err = '';
+		String err;
 		try {
 			RT_Expression expression = new RT_Expression('Random(1)');
 			expression.eval();
@@ -320,7 +330,7 @@ private class RT_ExpressionTest {
 		catch (RT_Expression.ExpressionException e) {
 			err = e.getMessage();
 		}
-		System.assertEquals('Function Random expected 0 parameters, got 1', err);
+		System.assertEquals('Function RANDOM expected 0 parameters, got 1', err);
 		
 		try {
 			RT_Expression expression = new RT_Expression('SIN(1, 6)');
@@ -333,7 +343,7 @@ private class RT_ExpressionTest {
 	}
 	
 	@isTest static void testVariableParameterNumbers() {
-		String err = '';
+		String err;
 		try {
 			RT_Expression expression = new RT_Expression('min()');
 			expression.eval();
@@ -366,28 +376,28 @@ private class RT_ExpressionTest {
 		System.assertEquals('0.5235988', new RT_Expression('RAD(30)').eval().toPlainString());
 		System.assertEquals('1718.873', new RT_Expression('DEG(30)').eval().toPlainString());
 	}
-
+	
 	@isTest static void testAsin() {
 		System.assertEquals('0', new RT_Expression('ASIN(0)').eval().toPlainString());
 		System.assertEquals('90', new RT_Expression('ASIN(1)').eval().toPlainString());
 		System.assertEquals('5.73917', new RT_Expression('ASIN(0.1)').eval().toPlainString());
 		System.assertEquals('30', new RT_Expression('ASIN(0.5)').eval().toPlainString());
 	}
-
+	
 	@isTest static void testAcos() {
 		System.assertEquals('90', new RT_Expression('ACOS(0)').eval().toPlainString());
 		System.assertEquals('0', new RT_Expression('ACOS(1)').eval().toPlainString());
 		System.assertEquals('84.26083', new RT_Expression('ACOS(0.1)').eval().toPlainString());
 		System.assertEquals('60', new RT_Expression('ACOS(0.5)').eval().toPlainString());
 	}
-
+	
 	@isTest static void testAtan() {
 		System.assertEquals('0', new RT_Expression('ATAN(0)').eval().toPlainString());
 		System.assertEquals('45', new RT_Expression('ATAN(1)').eval().toPlainString());
 		System.assertEquals('5.710593', new RT_Expression('ATAN(0.1)').eval().toPlainString());
 		System.assertEquals('26.56505', new RT_Expression('ATAN(0.5)').eval().toPlainString());
 	}
-
+	
 	@isTest static void testLog10() {
 		System.assertEquals('0.0', new RT_Expression('LOG10(1)').eval().toPlainString());
 		System.assertEquals('1', new RT_Expression('LOG10(10)').eval().toPlainString());
@@ -436,9 +446,12 @@ private class RT_ExpressionTest {
 		e = new RT_Expression('2.5/3').setRoundingMode(RoundingMode.UP);
 		System.assertEquals('0.8333334', e.eval().toPlainString());
 	}
-
+	
 	@isTest static void testIsNumber() {
 		System.assertEquals(false, RT_Expression.isNumber(''));
+		System.assertEquals(false, RT_Expression.isNumber('-'));
+		System.assertEquals(false, RT_Expression.isNumber('+'));
+		System.assertEquals(false, RT_Expression.isNumber('e'));
 		System.assertEquals(false, RT_Expression.isNumber(null));
 		System.assertEquals(true, RT_Expression.isNumber('-1'));
 		System.assertEquals(true, RT_Expression.isNumber('-10.5'));
@@ -452,7 +465,7 @@ private class RT_ExpressionTest {
 		public NullOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, RT_Expression.MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, RT_Expression.MathContext mc) {
 			return null;
 		}
 	}
@@ -479,7 +492,7 @@ private class RT_ExpressionTest {
 		public NullFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, RT_Expression.MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, RT_Expression.MathContext mc) {
 			return null;
 		}
 	}
@@ -611,7 +624,7 @@ private class RT_ExpressionTest {
 	}
 	
 	@isTest static void testSciError3() {
-		String err = '';
+		String err;
 		RT_Expression e = new RT_Expression('e2');
 		try {
 			e.eval();
@@ -619,7 +632,7 @@ private class RT_ExpressionTest {
 		catch (RT_Expression.ExpressionException ex) {
 			err = ex.getMessage();
 		}
-		System.assertEquals('Unknown operator or function: e2', err);
+		System.assertEquals('Unknown function or variable \'e2\' at position 1', err);
 	}
 	
 	/* TestTokenizer.java
@@ -627,244 +640,248 @@ private class RT_ExpressionTest {
 	
 	@isTest static void testTokenizerNumbers() {
 		RT_Expression e;
-		Iterator<String> i;
+		Iterator<RT_Expression.Token> i;
 		
 		e = new RT_Expression('1');
 		i = e.getExpressionTokenizer();
-		System.assertEquals('1', i.next());
+		System.assertEquals('1', i.next().text);
 		System.assertEquals(false, i.hasNext());
-		System.assertEquals(null, i.next());
 		
 		e = new RT_Expression('-1');
 		i = e.getExpressionTokenizer();
-		System.assertEquals('-1', i.next());
+		System.assertEquals('-1', i.next().text);
 		System.assertEquals(false, i.hasNext());
-		System.assertEquals(null, i.next());
 		
 		e = new RT_Expression('123');
 		i = e.getExpressionTokenizer();
-		System.assertEquals('123', i.next());
+		System.assertEquals('123', i.next().text);
 		System.assertEquals(false, i.hasNext());
-		System.assertEquals(null, i.next());
 		
 		e = new RT_Expression('-123');
 		i = e.getExpressionTokenizer();
-		System.assertEquals('-123', i.next());
+		System.assertEquals('-123', i.next().text);
 		System.assertEquals(false, i.hasNext());
-		System.assertEquals(null, i.next());
 		
 		e = new RT_Expression('123.4');
 		i = e.getExpressionTokenizer();
-		System.assertEquals('123.4', i.next());
+		System.assertEquals('123.4', i.next().text);
 		System.assertEquals(false, i.hasNext());
-		System.assertEquals(null, i.next());
 		
 		e = new RT_Expression('-123.456');
 		i = e.getExpressionTokenizer();
-		System.assertEquals('-123.456', i.next());
+		System.assertEquals('-123.456', i.next().text);
 		System.assertEquals(false, i.hasNext());
-		System.assertEquals(null, i.next());
 	}
 	
 	@isTest static void testTokenizerExtraSpaces() {
 		RT_Expression e = new RT_Expression('1 ');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		System.assert(i.hasNext());
-		System.assertEquals('1', i.next());
+		System.assertEquals('1', i.next().text);
 		System.assertEquals(false, i.hasNext());
-		System.assertEquals(null, i.next());
 		
 		e = new RT_Expression('       ');
 		i = e.getExpressionTokenizer();
 		System.assertEquals(false, i.hasNext());
-		System.assertEquals(null, i.next());
 		
 		e = new RT_Expression('   1      ');
 		i = e.getExpressionTokenizer();
 		System.assert(i.hasNext());
-		System.assertEquals('1', i.next());
+		System.assertEquals('1', i.next().text);
 		System.assertEquals(false, i.hasNext());
-		System.assertEquals(null, i.next());
 		
 		e = new RT_Expression('  1   +   2    ');
 		i = e.getExpressionTokenizer();
-		System.assertEquals('1', i.next());
-		System.assertEquals('+', i.next());
+		System.assertEquals('1', i.next().text);
+		System.assertEquals('+', i.next().text);
 		System.assert(i.hasNext());
-		System.assertEquals('2', i.next());
+		System.assertEquals('2', i.next().text);
 		System.assertEquals(false, i.hasNext());
-		System.assertEquals(null, i.next());
+	}
+	
+	@isTest static void testTokenizerNextThrows() {
+		try {
+			RT_Expression e = new RT_Expression('1');
+			Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
+			System.assertEquals('1', i.next().text);
+			System.assertEquals(false, i.hasNext());
+			i.next();
+			System.assert(false, 'Expected an exception');
+		}
+		catch (Exception e) {
+			System.assertEquals('RT_Expression.IllegalStateException', e.getTypeName());
+		}
 	}
 	
 	@isTest static void testTokenizer1() {
 		RT_Expression e = new RT_Expression('1+2');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('1', i.next());
-		System.assertEquals('+', i.next());
-		System.assertEquals('2', i.next());
+		System.assertEquals('1', i.next().text);
+		System.assertEquals('+', i.next().text);
+		System.assertEquals('2', i.next().text);
 	}
 	
 	@isTest static void testTokenizer2() {
 		RT_Expression e = new RT_Expression('1 + 2');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('1', i.next());
-		System.assertEquals('+', i.next());
-		System.assertEquals('2', i.next());
+		System.assertEquals('1', i.next().text);
+		System.assertEquals('+', i.next().text);
+		System.assertEquals('2', i.next().text);
 	}
 	
 	@isTest static void testTokenizer3() {
 		RT_Expression e = new RT_Expression(' 1 + 2 ');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('1', i.next());
-		System.assertEquals('+', i.next());
-		System.assertEquals('2', i.next());
+		System.assertEquals('1', i.next().text);
+		System.assertEquals('+', i.next().text);
+		System.assertEquals('2', i.next().text);
 	}
 	
 	@isTest static void testTokenizer4() {
 		RT_Expression e = new RT_Expression('1+2-3/4*5');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('1', i.next());
-		System.assertEquals('+', i.next());
-		System.assertEquals('2', i.next());
-		System.assertEquals('-', i.next());
-		System.assertEquals('3', i.next());
-		System.assertEquals('/', i.next());
-		System.assertEquals('4', i.next());
-		System.assertEquals('*', i.next());
-		System.assertEquals('5', i.next());
+		System.assertEquals('1', i.next().text);
+		System.assertEquals('+', i.next().text);
+		System.assertEquals('2', i.next().text);
+		System.assertEquals('-', i.next().text);
+		System.assertEquals('3', i.next().text);
+		System.assertEquals('/', i.next().text);
+		System.assertEquals('4', i.next().text);
+		System.assertEquals('*', i.next().text);
+		System.assertEquals('5', i.next().text);
 	}
 	
 	@isTest static void testTokenizer5() {
 		RT_Expression e = new RT_Expression('1+2.1-3.45/4.982*5.0');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('1', i.next());
-		System.assertEquals('+', i.next());
-		System.assertEquals('2.1', i.next());
-		System.assertEquals('-', i.next());
-		System.assertEquals('3.45', i.next());
-		System.assertEquals('/', i.next());
-		System.assertEquals('4.982', i.next());
-		System.assertEquals('*', i.next());
-		System.assertEquals('5.0', i.next());
+		System.assertEquals('1', i.next().text);
+		System.assertEquals('+', i.next().text);
+		System.assertEquals('2.1', i.next().text);
+		System.assertEquals('-', i.next().text);
+		System.assertEquals('3.45', i.next().text);
+		System.assertEquals('/', i.next().text);
+		System.assertEquals('4.982', i.next().text);
+		System.assertEquals('*', i.next().text);
+		System.assertEquals('5.0', i.next().text);
 	}
 	
 	@isTest static void testTokenizer6() {
 		RT_Expression e = new RT_Expression('-3+4*-1');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('-3', i.next());
-		System.assertEquals('+', i.next());
-		System.assertEquals('4', i.next());
-		System.assertEquals('*', i.next());
-		System.assertEquals('-1', i.next());
+		System.assertEquals('-3', i.next().text);
+		System.assertEquals('+', i.next().text);
+		System.assertEquals('4', i.next().text);
+		System.assertEquals('*', i.next().text);
+		System.assertEquals('-1', i.next().text);
 	}
 	
 	@isTest static void testTokenizer7() {
 		RT_Expression e = new RT_Expression('(-3+4)*-1/(7-(5*-8))');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('(', i.next());
-		System.assertEquals('-3', i.next());
-		System.assertEquals('+', i.next());
-		System.assertEquals('4', i.next());
-		System.assertEquals(')', i.next());
-		System.assertEquals('*', i.next());
-		System.assertEquals('-1', i.next());
-		System.assertEquals('/', i.next());
-		System.assertEquals('(', i.next());
-		System.assertEquals('7', i.next());
-		System.assertEquals('-', i.next());
-		System.assertEquals('(', i.next());
-		System.assertEquals('5', i.next());
-		System.assertEquals('*', i.next());
-		System.assertEquals('-8', i.next());
-		System.assertEquals(')', i.next());
-		System.assertEquals(')', i.next());
+		System.assertEquals('(', i.next().text);
+		System.assertEquals('-3', i.next().text);
+		System.assertEquals('+', i.next().text);
+		System.assertEquals('4', i.next().text);
+		System.assertEquals(')', i.next().text);
+		System.assertEquals('*', i.next().text);
+		System.assertEquals('-1', i.next().text);
+		System.assertEquals('/', i.next().text);
+		System.assertEquals('(', i.next().text);
+		System.assertEquals('7', i.next().text);
+		System.assertEquals('-', i.next().text);
+		System.assertEquals('(', i.next().text);
+		System.assertEquals('5', i.next().text);
+		System.assertEquals('*', i.next().text);
+		System.assertEquals('-8', i.next().text);
+		System.assertEquals(')', i.next().text);
+		System.assertEquals(')', i.next().text);
 	}
 	
-	public void testTokenizer8() {
+	@isTest static void testTokenizer8() {
 		RT_Expression e = new RT_Expression('(1.9+2.8)/4.7');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('(', i.next());
-		System.assertEquals('1.9', i.next());
-		System.assertEquals('+', i.next());
-		System.assertEquals('2.8', i.next());
-		System.assertEquals(')', i.next());
-		System.assertEquals('/', i.next());
-		System.assertEquals('4.7', i.next());
+		System.assertEquals('(', i.next().text);
+		System.assertEquals('1.9', i.next().text);
+		System.assertEquals('+', i.next().text);
+		System.assertEquals('2.8', i.next().text);
+		System.assertEquals(')', i.next().text);
+		System.assertEquals('/', i.next().text);
+		System.assertEquals('4.7', i.next().text);
 	}
 	
 	@isTest static void testTokenizerFunction1() {
 		RT_Expression e = new RT_Expression('ABS(3.5)');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('ABS', i.next());
-		System.assertEquals('(', i.next());
-		System.assertEquals('3.5', i.next());
-		System.assertEquals(')', i.next());
+		System.assertEquals('ABS', i.next().text);
+		System.assertEquals('(', i.next().text);
+		System.assertEquals('3.5', i.next().text);
+		System.assertEquals(')', i.next().text);
 	}
 	
 	@isTest static void testTokenizerFunction2() {
 		RT_Expression e = new RT_Expression('3-ABS(3.5)/9');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('3', i.next());
-		System.assertEquals('-', i.next());
-		System.assertEquals('ABS', i.next());
-		System.assertEquals('(', i.next());
-		System.assertEquals('3.5', i.next());
-		System.assertEquals(')', i.next());
-		System.assertEquals('/', i.next());
-		System.assertEquals('9', i.next());
+		System.assertEquals('3', i.next().text);
+		System.assertEquals('-', i.next().text);
+		System.assertEquals('ABS', i.next().text);
+		System.assertEquals('(', i.next().text);
+		System.assertEquals('3.5', i.next().text);
+		System.assertEquals(')', i.next().text);
+		System.assertEquals('/', i.next().text);
+		System.assertEquals('9', i.next().text);
 	}
 	@isTest static void testTokenizerFunction3() {
 		RT_Expression e = new RT_Expression('MAX(3.5,5.2)');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('MAX', i.next());
-		System.assertEquals('(', i.next());
-		System.assertEquals('3.5', i.next());
-		System.assertEquals(',', i.next());
-		System.assertEquals('5.2', i.next());
-		System.assertEquals(')', i.next());
+		System.assertEquals('MAX', i.next().text);
+		System.assertEquals('(', i.next().text);
+		System.assertEquals('3.5', i.next().text);
+		System.assertEquals(',', i.next().text);
+		System.assertEquals('5.2', i.next().text);
+		System.assertEquals(')', i.next().text);
 	}
 	
 	@isTest static void testTokenizerFunction4() {
 		RT_Expression e = new RT_Expression('3-MAX(3.5,5.2)/9');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('3', i.next());
-		System.assertEquals('-', i.next());
-		System.assertEquals('MAX', i.next());
-		System.assertEquals('(', i.next());
-		System.assertEquals('3.5', i.next());
-		System.assertEquals(',', i.next());
-		System.assertEquals('5.2', i.next());
-		System.assertEquals(')', i.next());
-		System.assertEquals('/', i.next());
-		System.assertEquals('9', i.next());
+		System.assertEquals('3', i.next().text);
+		System.assertEquals('-', i.next().text);
+		System.assertEquals('MAX', i.next().text);
+		System.assertEquals('(', i.next().text);
+		System.assertEquals('3.5', i.next().text);
+		System.assertEquals(',', i.next().text);
+		System.assertEquals('5.2', i.next().text);
+		System.assertEquals(')', i.next().text);
+		System.assertEquals('/', i.next().text);
+		System.assertEquals('9', i.next().text);
 	}
 	
 	@isTest static void testTokenizerFunction5() {
 		RT_Expression e = new RT_Expression('3/MAX(-3.5,-5.2)/9');
-		Iterator<String> i = e.getExpressionTokenizer();
+		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
 		
-		System.assertEquals('3', i.next());
-		System.assertEquals('/', i.next());
-		System.assertEquals('MAX', i.next());
-		System.assertEquals('(', i.next());
-		System.assertEquals('-3.5', i.next());
-		System.assertEquals(',', i.next());
-		System.assertEquals('-5.2', i.next());
-		System.assertEquals(')', i.next());
-		System.assertEquals('/', i.next());
-		System.assertEquals('9', i.next());
+		System.assertEquals('3', i.next().text);
+		System.assertEquals('/', i.next().text);
+		System.assertEquals('MAX', i.next().text);
+		System.assertEquals('(', i.next().text);
+		System.assertEquals('-3.5', i.next().text);
+		System.assertEquals(',', i.next().text);
+		System.assertEquals('-5.2', i.next().text);
+		System.assertEquals(')', i.next().text);
+		System.assertEquals('/', i.next().text);
+		System.assertEquals('9', i.next().text);
 	}
 	
 	/* TestVarArgs.java
@@ -934,24 +951,46 @@ private class RT_ExpressionTest {
 	 */
 	
 	@isTest static void testVars() {
-		System.assertEquals('3.141593', new RT_Expression('PI').eval() + '');
-		System.assertEquals('3.141592653589793', new RT_Expression('PI').setPrecision(0).eval() + '');
-		System.assertEquals('3.141592653589793', new RT_Expression('PI').setPrecision(34).eval() + '');
-		System.assertEquals('3.141592653589793', new RT_Expression('PI').setPrecision(16).eval() + '');
-		System.assertEquals('3.141593', new RT_Expression('PI').setPrecision(7).eval() + '');
-		System.assertEquals('6.283186', new RT_Expression('PI*2.0').eval() + '');
-		System.assertEquals(
-		    '21',
-		    new RT_Expression('3*x').setVariable('x', 7).eval() + ''
-		);
-		System.assertEquals(
-		    '20',
-		    new RT_Expression('(a^2)+(b^2)').setVariable('a', 2).setVariable('b', 4).eval().toPlainString()
-		);
-		System.assertEquals(
-		    '68719480000',
-		    new RT_Expression('a^(2+b)^2').setVariable('a', '2').setVariable('b', '4').eval().toPlainString()
-		);
+		String actual;
+		
+		actual = new RT_Expression('PI').eval() + '';
+		System.assertEquals('3.141593', actual);
+		
+		actual = new RT_Expression('PI').setPrecision(0).eval() + '';
+		System.assertEquals('3.141592653589793', actual);
+		
+		actual = new RT_Expression('PI').setPrecision(34).eval() + '';
+		System.assertEquals('3.141592653589793', actual);
+		
+		actual = new RT_Expression('PI').setPrecision(16).eval() + '';
+		System.assertEquals('3.141592653589793', actual);
+		
+		actual = new RT_Expression('PI').setPrecision(7).eval() + '';
+		System.assertEquals('3.141593', actual);
+		
+		actual = new RT_Expression('PI*2.0').eval() + '';
+		System.assertEquals('6.283186', actual);
+		
+		actual = new RT_Expression('E').eval() + '';
+		System.assertEquals('2.718282', actual);
+		
+		actual = new RT_Expression('e*2.0').eval() + '';
+		System.assertEquals('5.436564', actual);
+		
+		actual = new RT_Expression('E*2e3').eval() + '';
+		System.assertEquals('5436.564', actual);
+		
+		actual = new RT_Expression('3*x').setVariable('x', 7).eval() + '';
+		System.assertEquals('21', actual);
+		
+		actual = new RT_Expression('(a^2)+(b^2)').setVariable('a', 2).setVariable('b', 4).eval().toPlainString();
+		System.assertEquals('20', actual);
+		
+		actual = new RT_Expression('a^(2+b)^2').setVariable('a', '2').setVariable('b', '4').eval().toPlainString();
+		System.assertEquals('68719480000', actual);
+		
+		actual = new RT_Expression('(a == null && b != null) && true').with('a', (Decimal) null).with('b', 1).eval().toPlainString();
+		System.assertEquals('1', actual);
 	}
 	
 	@isTest static void testSubstitution() {
@@ -962,40 +1001,33 @@ private class RT_ExpressionTest {
 		System.assertEquals('0', e.with('x', '0').eval().toPlainString());
 	}
 	
+	@isTest static void testNullSubstitution() {
+		RT_Expression e = new RT_Expression('x+y');
+		
+		System.assertEquals('1', e.with('x', (Decimal) null).with('y', '1').eval().toPlainString());
+		System.assertEquals('0', e.with('y', (Decimal) null).eval().toPlainString());
+		System.assertEquals('1', e.with('x', '1').eval().toPlainString());
+	}
+	
 	@isTest static void testWith() {
-		System.assertEquals(
-		    '21',
-		    new RT_Expression('3*x').with('x', 7).eval() + ''
-		);
-		System.assertEquals(
-		    '20',
-		    new RT_Expression('(a^2)+(b^2)').with('a', 2).with('b', 4).eval().toPlainString()
-		);
-		System.assertEquals(
-		    '68719480000',
-		    new RT_Expression('a^(2+b)^2').with('a', '2').with('b', '4').eval().toPlainString()
-		);
-		System.assertEquals(
-		    '68719480000',
-		    new RT_Expression('_a^(2+_b)^2').with('_a', '2').with('_b', '4').eval().toPlainString()
-		);
+		String actual;
+		actual = new RT_Expression('3*x').with('x', 7).eval() + '';
+		System.assertEquals('21', actual);
+		
+		actual = new RT_Expression('(a^2)+(b^2)').with('a', 2).with('b', 4).eval().toPlainString();
+		System.assertEquals('20', actual);
+		
+		actual = new RT_Expression('a^(2+b)^2').with('a', '2').with('b', '4').eval().toPlainString();
+		System.assertEquals('68719480000', actual);
+		
+		actual = new RT_Expression('_a^(2+_b)^2').with('_a', '2').with('_b', '4').eval().toPlainString();
+		System.assertEquals('68719480000', actual);
 	}
 	
 	@isTest static void testNames() {
-		System.assertEquals(
-		    '21',
-		    new RT_Expression('3*longname').with('longname', 7).eval() + ''
-		);
-		
-		System.assertEquals(
-		    '21',
-		    new RT_Expression('3*longname1').with('longname1', 7).eval() + ''
-		);
-		
-		System.assertEquals(
-		    '21',
-		    new RT_Expression('3*_longname1').with('_longname1', 7).eval() + ''
-		);
+		System.assertEquals('21', new RT_Expression('3*longname').with('longname', 7).eval() + '');
+		System.assertEquals('21', new RT_Expression('3*longname1').with('longname1', 7).eval() + '');
+		System.assertEquals('21', new RT_Expression('3*_longname1').with('_longname1', 7).eval() + '');
 	}
 	
 	@isTest static void testQuadraticFormula() {
@@ -1029,34 +1061,37 @@ private class RT_ExpressionTest {
 		System.assert(!e1.equals(e2));
 		System.assert(e1.hashCode() != e2.hashCode());
 	}
-
+	
 	@isTest static void testMismatchedParens1() {
+		String err;
 		try {
 			new RT_Expression('(').eval();
-			System.assert(false);
 		}
 		catch (Exception e) {
-			System.assertEquals('Mismatched parentheses', e.getMessage());
+			err = e.getMessage();
 		}
+		System.assertEquals('Mismatched parentheses', err);
 	}
-
+	
 	@isTest static void testMismatchedParens2() {
+		String err;
 		try {
 			new RT_Expression('4)').eval();
-			System.assert(false);
 		}
 		catch (Exception e) {
-			System.assertEquals('Mismatched parentheses', e.getMessage());
+			err = e.getMessage();
 		}
+		System.assertEquals('Mismatched parentheses', err);
 	}
-
+	
 	@isTest static void testFunctionError() {
+		String err;
 		try {
 			new RT_Expression('MIN, ').eval();
-			System.assert(false);
 		}
 		catch (Exception e) {
-			System.assertEquals('Parse error for function \'MIN\'', e.getMessage());
+			err = e.getMessage();
 		}
+		System.assertEquals('Parse error for function \'MIN\'', err);
 	}
 }

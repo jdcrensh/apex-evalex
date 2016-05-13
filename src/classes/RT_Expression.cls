@@ -33,6 +33,7 @@ public class RT_Expression implements IExpression {
 
 	interface IExpression {
 		Decimal eval();
+		Boolean evalBool();
 		String toRPN();
 		RT_Expression setPrecision(Integer precision);
 		RT_Expression setRoundingMode(RoundingMode roundingMode);
@@ -40,7 +41,7 @@ public class RT_Expression implements IExpression {
 		RT_Expression setVariable(String variable, String value);
 		RT_Expression with(String variable, Decimal value);
 		RT_Expression with(String variable, String value);
-		Iterator<String> getExpressionTokenizer();
+		Iterator<Token> getExpressionTokenizer();
 		Set<String> getDeclaredVariables();
 		Set<String> getDeclaredOperators();
 		Set<String> getDeclaredFunctions();
@@ -63,9 +64,16 @@ public class RT_Expression implements IExpression {
 	 */
 	private static Map<String, Function> functions;
 	
+	private static Set<TokenType> caseInsensitiveTokens;
+	
 	static {
 		operators = new Map<String, Operator>();
 		functions = new Map<String, Function>();
+		
+		caseInsensitiveTokens = new Set<TokenType> {
+			TokenType.VARIABLE,
+			TokenType.FUNCTION
+		};
 		
 		// default operators
 		addOperator(new AddOperator('+', 20, Associability.LEFT));
@@ -128,7 +136,7 @@ public class RT_Expression implements IExpression {
 	 *
 	 * @return the cached RPN instance.
 	 */
-	private List<String> rpn {
+	private List<Token> rpn {
 		get {
 			if (rpn == null) {
 				rpn = shuntingYard(this.expression);
@@ -140,33 +148,56 @@ public class RT_Expression implements IExpression {
 	}
 	
 	/**
-	 * All defined variables with name and value
+	 * All defined variables by name and value
 	 */
-	public Map<String, Decimal> variables = new Map<String, Decimal>();
+	public Map<String, Decimal> variables;
 	
 	/**
-	 * Creates a new expression instance from an expression string with a given
-	 * default match context of MathContext#DECIMAL32.
+	 * Creates a new expression instance from an expression string.
 	 *
 	 * @param expression the expression. E.g. `'2.4*sin(3)/(2-4)'` or `'sin(y)>0 & max(z, 3)>3'`
 	 */
 	public RT_Expression(String expression) {
-		this(expression, new MathContext(7, RoundingMode.HALF_EVEN));
+		this(expression, new Map<String, Decimal>());
 	}
 	
 	/**
-	 * Creates a new expression instance from an expression string with a given
-	 * default match context.
+	 * Creates a new expression instance from an expression string with the given variables.
 	 *
-	 * @param expression the expression, eg: `2.4*sin(3)/(2-4)` or `sin(y)>0 && max(z, 3)>3`
+	 * @param expression the expression. E.g. `'2.4*sin(3)/(2-4)'` or `'sin(y)>0 & max(z, 3)>3'`
+	 * @param variables a mapping of variables
+	 */
+	public RT_Expression(String expression, Map<String, Decimal> variables) {
+		this(expression, variables, new MathContext(7, RoundingMode.HALF_EVEN));
+	}
+	
+	/**
+	 * Creates a new expression instance from an expression string with a default MathContext.
+	 *
+	 * @param expression the expression. E.g. `'2.4*sin(3)/(2-4)'` or `'sin(y)>0 & max(z, 3)>3'`
+	 * @param mc an instance of MathContext
 	 */
 	public RT_Expression(String expression, MathContext mc) {
+		this(expression, new Map<String, Decimal>(), mc);
+	}
+	
+	/**
+	 * Creates a new expression instance from an expression string with the given variables
+	 * and a default MathContext.
+	 *
+	 * @param expression the expression, eg: `2.4*sin(3)/(2-4)` or `sin(y)>0 && max(z, 3)>3`
+	 * @param variables a mapping of variables
+	 * @param mc an instance of MathContext
+	 */
+	public RT_Expression(String expression, Map<String, Decimal> variables, MathContext mc) {
 		this.expression = expression;
 		this.mc = mc;
-		
+		this.variables = variables;
+		variables.put('E', Math.E);
 		variables.put('PI', Math.PI);
 		variables.put('TRUE', ONE);
 		variables.put('FALSE', ZERO);
+		variables.put('NULL', null);
 	}
 	
 	/**
@@ -174,90 +205,85 @@ public class RT_Expression implements IExpression {
 	 * infix expression to a RPN expression.
 	 *
 	 * @param expression the input expression in infx.
-	 * @return an RPN representation of the expression, with
-	 *         each token as a list member.
+	 * @return an RPN representation of the expression, with each token as a list member.
 	 */
-	private List<String> shuntingYard(String expression) {
-		List<String> outputQueue = new List<String>();
+	private List<Token> shuntingYard(String expression) {
+		List<Token> outputQueue = new List<Token>();
 		RT_Stack stack = new RT_Stack();
 		
 		Tokenizer tokenizer = new Tokenizer(expression, this);
 		
-		String lastFunction;
-		String previousToken;
+		Token lastFunction;
+		Token previousToken;
 		while (tokenizer.hasNext()) {
-			String token = tokenizer.next();
-			if (isNumber(token)) {
+			Token token = tokenizer.next();
+			if (token.type == TokenType.NUMBERX) {
 				outputQueue.add(token);
 			}
-			else if (variables.containsKey(token.toUpperCase())) {
+			else if (token.type == TokenType.VARIABLE) {
 				outputQueue.add(token);
 			}
-			else if (functions.containsKey(token.toUpperCase())) {
+			else if (token.type == TokenType.FUNCTION) {
 				stack.push(token);
 				lastFunction = token;
 			}
-			else if (charAt(token, 0).isAlpha()) {
-				stack.push(token);
-			}
-			else if (token == ',') {
-				while (!stack.isEmpty() && stack.peek() != '(') {
-					outputQueue.add((String) stack.pop());
+			else if (token.type == TokenType.COMMA) {
+				while (!stack.empty() && ((Token) stack.peek()).type != TokenType.LEFT_PAREN) {
+					outputQueue.add((Token) stack.pop());
 				}
-				if (stack.isEmpty()) {
-					throw new ExpressionException('Parse error for function \'' + lastFunction + '\'');
+				if (stack.empty()) {
+					throw new ExpressionException('Parse error for function \'' + (lastFunction == null ? null : lastFunction.text) + '\'');
 				}
 			}
-			else if (operators.containsKey(token)) {
-				Operator o1 = operators.get(token);
-				String token2 = stack.isEmpty() ? null : (String) stack.peek();
+			else if (token.type == TokenType.OPERATOR) {
+				Operator o1 = operators.get(token.text);
+				Token token2 = stack.empty() ? null : (Token) stack.peek();
 				while (
 				    token2 != null &&
-				    operators.containsKey(token2) && (
-				        o1.isLeftAssoc() && o1.getPrecedence() <= operators.get(token2).getPrecedence() ||
-				        o1.getPrecedence() < operators.get(token2).getPrecedence()
+				    token2.type == TokenType.OPERATOR && (
+				        o1.isLeftAssoc() && o1.getPrecedence() <= operators.get(token2.text).getPrecedence() ||
+				        o1.getPrecedence() < operators.get(token2.text).getPrecedence()
 				    )
 				) {
-					outputQueue.add((String) stack.pop());
-					token2 = stack.isEmpty() ? null : (String) stack.peek();
+					outputQueue.add((Token) stack.pop());
+					token2 = stack.empty() ? null : (Token) stack.peek();
 				}
 				stack.push(token);
 			}
-			else if (token == '(') {
+			else if (token.type == TokenType.LEFT_PAREN) {
 				if (previousToken != null) {
-					if (isNumber(previousToken)) {
+					if (previousToken.type == TokenType.NUMBERX) {
 						throw new ExpressionException('Missing operator at character position ' + tokenizer.getPos());
 					}
 					// if the ( is preceded by a valid function, then it
 					// denotes the start of a parameter list
-					if (functions.containsKey(previousToken.toUpperCase())) {
+					if (previousToken.type == TokenType.FUNCTION) {
 						outputQueue.add(token);
 					}
 				}
 				stack.push(token);
 			}
-			else if (token == ')') {
-				while (!stack.isEmpty() && !'('.equals(stack.peek())) {
-					outputQueue.add((String) stack.pop());
+			else if (token.type == TokenType.RIGHT_PAREN) {
+				while (!stack.empty() && ((Token) stack.peek()).type != TokenType.LEFT_PAREN) {
+					outputQueue.add((Token) stack.pop());
 				}
-				if (stack.isEmpty()) {
+				if (stack.empty()) {
 					throw new ExpressionException('Mismatched parentheses');
 				}
 				stack.pop();
-				if (!stack.isEmpty()
-				    && functions.containsKey(((String) stack.peek()).toUpperCase())) {
-					outputQueue.add((String) stack.pop());
+				if (!stack.empty() && ((Token) stack.peek()).type == TokenType.FUNCTION) {
+					outputQueue.add((Token) stack.pop());
 				}
 			}
 			previousToken = token;
 		}
-		while (!stack.isEmpty()) {
-			String element = (String) stack.pop();
-			if (element == '(' || element == ')') {
+		while (!stack.empty()) {
+			Token element = (Token) stack.pop();
+			if (element.type == TokenType.LEFT_PAREN || element.type == TokenType.RIGHT_PAREN) {
 				throw new ExpressionException('Mismatched parentheses');
 			}
-			if (!operators.containsKey(element)) {
-				throw new ExpressionException('Unknown operator or function: ' + element);
+			if (element.type != TokenType.OPERATOR) {
+				throw new ExpressionException('Unknown operator or function: ' + element.text);
 			}
 			outputQueue.add(element);
 		}
@@ -272,45 +298,55 @@ public class RT_Expression implements IExpression {
 	public Decimal eval() {
 		RT_Stack stack = new RT_Stack();
 		
-		for (String token : rpn) {
-			if (operators.containsKey(token)) {
+		for (Token token : rpn) {
+			if (token.type == TokenType.OPERATOR) {
 				Decimal v1 = (Decimal) stack.pop();
 				Decimal v2 = (Decimal) stack.pop();
-				stack.push(operators.get(token).eval(v2, v1, this.mc));
+				stack.push(operators.get(token.text).apply(nullValue(v2), nullValue(v1), this.mc));
 			}
-			else if (variables.containsKey(token.toUpperCase())) {
-				stack.push(round(variables.get(token.toUpperCase()), mc));
+			else if (token.type == TokenType.VARIABLE) {
+				Decimal val = nullValue(variables.get(token.text));
+				stack.push(round(val, mc));
 			}
-			else if (functions.containsKey(token.toUpperCase())) {
-				Function f = functions.get(token.toUpperCase());
+			else if (token.type == TokenType.FUNCTION) {
+				Function f = functions.get(token.text);
 				List<Decimal> p = new List<Decimal>();
 				// pop parameters off the stack until we hit the start of
 				// this function's parameter list
-				while (!stack.isEmpty() && stack.peek() != null) {
-					if (p.isEmpty()) {
-						p.add((Decimal) stack.pop());
-					}
-					else {
-						p.add(0, (Decimal) stack.pop());
-					}
+				while (!stack.empty() && stack.peek() != null) {
+					unshift(p, (Decimal) stack.pop());
 				}
 				if (stack.peek() == null) {
 					stack.pop();
 				}
 				if (!f.numParamsVaries() && p.size() != f.getNumParams()) {
-					throw new ExpressionException('Function ' + token + ' expected ' + f.getNumParams() + ' parameters, got ' + p.size());
+					throw new ExpressionException('Function ' + token.text + ' expected ' + f.getNumParams() + ' parameters, got ' + p.size());
 				}
 				
-				stack.push(f.eval(p, this.mc));
+				stack.push(f.apply(p, this.mc));
 			}
-			else if (token == '(') {
+			else if (token.type == TokenType.LEFT_PAREN) {
 				stack.push(null);
 			}
 			else {
-				stack.push(Decimal.valueOf(token));
+				stack.push(Decimal.valueOf(token.text));
 			}
 		}
-		return ((Decimal) stack.pop()).stripTrailingZeros();
+		
+		Decimal res = stack.empty() ? 0 : (Decimal) stack.pop();
+		return res.stripTrailingZeros();
+	}
+	
+	public Boolean evalBool() {
+		try {
+			return eval() != 0;
+		}
+		catch (ExpressionException e) {
+			if (e.getMessage() == 'Empty expression') {
+				return true;
+			}
+			throw e;
+		}
 	}
 	
 	/**
@@ -412,7 +448,7 @@ public class RT_Expression implements IExpression {
 	 *
 	 * @return a new iterator instance for this expression.
 	 */
-	public Iterator<String> getExpressionTokenizer() {
+	public Iterator<Token> getExpressionTokenizer() {
 		return new Tokenizer(this.expression, this);
 	}
 	
@@ -422,17 +458,17 @@ public class RT_Expression implements IExpression {
 	 * for only 1 result stored at the end of the evaluation.
 	 *
 	 */
-	private void validate(List<String> rpn) {
+	private void validate(List<Token> rpn) {
 		/*-
 		* Thanks to Norman Ramsey:
 		* http://http://stackoverflow.com/questions/789847/postfix-notation-validation
 		*/
 		Integer counter = 0;
 		RT_Stack params = new RT_Stack();
-		for (String token : rpn) {
-			if ('('.equals(token)) {
+		for (Token token : rpn) {
+			if (token.type == TokenType.LEFT_PAREN) {
 				// is this a nested function call?
-				if (!params.isEmpty()) {
+				if (!params.empty()) {
 					// increment the current function's param count
 					// (the return of the nested function call
 					// will be a parameter for the current function)
@@ -441,9 +477,9 @@ public class RT_Expression implements IExpression {
 				// start a new parameter count
 				params.push(0);
 			}
-			else if (!params.isEmpty()) {
+			else if (!params.empty()) {
 				Integer inc = (Integer) params.pop() + 1;
-				if (functions.containsKey(token.toUpperCase())) {
+				if (token.type == TokenType.FUNCTION) {
 					// remove the parameters and the ( from the counter
 					counter -= inc;
 				}
@@ -452,12 +488,12 @@ public class RT_Expression implements IExpression {
 					params.push(inc);
 				}
 			}
-			else if (operators.containsKey(token)) {
+			else if (token.type == TokenType.OPERATOR) {
 				//we only have binary operators
 				counter -= 2;
 			}
 			if (counter < 0) {
-				throw new ExpressionException('Too many operators or functions at: ' + token);
+				throw new ExpressionException('Too many operators or functions at: ' + token.text);
 			}
 			counter++;
 		}
@@ -477,11 +513,11 @@ public class RT_Expression implements IExpression {
 	 */
 	public String toRPN() {
 		String result = '';
-		for (String st : rpn) {
+		for (Token st : rpn) {
 			if (result.length() != 0) {
 				result += ' ';
 			}
-			result += st;
+			result += st.text;
 		}
 		return result;
 	}
@@ -523,7 +559,7 @@ public class RT_Expression implements IExpression {
 	 * @return measurement of the angle `angdeg` in radians.
 	 */
 	private static Decimal toRadians(Decimal angdeg) {
-		return angdeg / 180.0 * Math.PI;
+		return nullValue(angdeg) / 180.0 * Math.PI;
 	}
 	
 	/**
@@ -536,7 +572,7 @@ public class RT_Expression implements IExpression {
 	 * @return the measurement of the angle `angrad` in degrees.
 	 */
 	private static Decimal toDegrees(Decimal angrad) {
-		return angrad * 180.0 / Math.PI;
+		return nullValue(angrad) * 180.0 / Math.PI;
 	}
 	
 	/**
@@ -550,6 +586,7 @@ public class RT_Expression implements IExpression {
 	 * Round a Decimal given a MathContext
 	 */
 	private static Decimal round(Decimal d, MathContext mc) {
+		d = nullValue(d);
 		Integer precision = mc.precision;
 		RoundingMode roundingMode = mc.roundingMode;
 		Integer numToChop = d.precision() - precision;
@@ -561,6 +598,27 @@ public class RT_Expression implements IExpression {
 		Decimal rounded = d.divide(div, scale, roundingMode);
 		rounded = rounded * div;
 		return rounded;
+	}
+	
+	/**
+	* Get value as zero in case of null
+	* @param d Decimal that may be null
+	* @return d if not null, zero otherwise
+	*/
+	private static Decimal nullValue(Decimal d) {
+		return d == null ? ZERO : d;
+	}
+	
+	/**
+	 * Safely inserts an element at the beginning of a potentially empty list
+	 */
+	private static void unshift(List<Decimal> l, Decimal d) {
+		if (l.isEmpty()) {
+			l.add(d);
+		}
+		else {
+			l.add(0, d);
+		}
 	}
 	
 	/**
@@ -592,14 +650,14 @@ public class RT_Expression implements IExpression {
 		if (obj == null) { return false; }
 		if (!(obj instanceof RT_Expression)) { return false; }
 		RT_Expression e = (RT_Expression) obj;
-		if (rpn != e.rpn) { return false; }
+		if (expression != e.expression) { return false; }
 		if (variables != e.variables) { return false; }
 		return true;
 	}
 	
 	public Integer hashCode() {
 		Integer res = 1;
-		res = 31 * res + (rpn != null ? System.hashCode(rpn) : 0);
+		res = 31 * res + (expression != null ? System.hashCode(expression) : 0);
 		res = 31 * res + (variables != null ? System.hashCode(variables) : 0);
 		return res;
 	}
@@ -633,10 +691,6 @@ public class RT_Expression implements IExpression {
 			this.numParams = numParams;
 		}
 		
-		public Function() {
-			throw new UnsupportedOperationException();
-		}
-		
 		public String getName() {
 			return name;
 		}
@@ -655,7 +709,7 @@ public class RT_Expression implements IExpression {
 		 * @param parameters passed by evaluator as a List of Decimal values
 		 * @return a new Decimal value as a computing result
 		 */
-		public abstract Decimal eval(List<Decimal> parameters, MathContext mc);
+		public abstract Decimal apply(List<Decimal> parameters, MathContext mc);
 	}
 	
 	/**
@@ -708,14 +762,37 @@ public class RT_Expression implements IExpression {
 		 * @param v2 operand 2
 		 * @return result of the operation
 		 */
-		public abstract Decimal eval(Decimal v1, Decimal v2, MathContext mc);
+		public abstract Decimal apply(Decimal v1, Decimal v2, MathContext mc);
+	}
+	
+	public class Token {
+		public TokenType type;
+		public String text;
+		
+		public Token(TokenType type, String text) {
+			this.type = type;
+			this.text = caseInsensitiveTokens.contains(type) ? text.toUpperCase() : text;
+		}
+	}
+	
+	public enum TokenType {
+		OPERATOR,
+		UNARY_OPERATOR,
+		FUNCTION,
+		VARIABLE,
+		LEFT_PAREN,
+		RIGHT_PAREN,
+		COMMA,
+		NUMBERX,
+		STRINGX,
+		UNKNOWN
 	}
 	
 	/**
 	 * Expression tokenizer that allows to iterate over a String
 	 * expression token by token. Blank characters will be skipped.
 	 */
-	public class Tokenizer implements Iterator<String> {
+	public class Tokenizer implements Iterator<Token> {
 	
 		private RT_Expression expr;
 		
@@ -731,7 +808,7 @@ public class RT_Expression implements IExpression {
 		/**
 		 * The previous token or `null` if none.
 		 */
-		private String previousToken;
+		private Token previousToken;
 		
 		/**
 		 * Creates a new tokenizer for an expression.
@@ -761,52 +838,72 @@ public class RT_Expression implements IExpression {
 			}
 		}
 		
-		public String next() {
+		public Token next() {
 			String token = '';
 			if (pos >= input.length()) {
-				return previousToken = null;
+				throw new IllegalStateException();
 			}
 			String ch = charAt(input, pos);
 			while (ch.isWhitespace() && pos < input.length()) {
 				ch = charAt(input, ++pos);
 			}
 			if (ch.isNumeric()) {
-				while (ch != '' &&
-				       (ch.isNumeric() || ch == '.'
-				        || ch == 'e' || ch == 'E'
-				        || (ch == '-' && token.length() > 0
-				            && ('e' == charAt(token, token.length() - 1) || 'E' == charAt(token, token.length() - 1)))
-				        || (ch == '+' && token.length() > 0
-				            && ('e' == charAt(token, token.length() - 1) || 'E' == charAt(token, token.length() - 1)))
-				       ) && (pos < input.length())) {
+				while (
+				    ch != '' && (
+				        ch.isNumeric() || '.eE'.contains(ch) || (
+				            token.length() > 0 &&
+				            '+-'.contains(ch) &&
+				            'e' == charAt(token, token.length() - 1)
+				        )
+				    ) && pos < input.length()
+				) {
 					token += charAt(input, pos++);
 					ch = pos == input.length() ? '' : charAt(input, pos);
 				}
+				return previousToken = new Token(TokenType.NUMBERX, token);
 			}
-			else if (ch == '-'
-			         && peekNextChar().isNumeric()
-			         && ('('.equals(previousToken) || ','.equals(previousToken)
-			             || previousToken == null || operators
-			             .containsKey(previousToken))) {
+			else if (
+			    ch == '-' && (
+			        peekNextChar().isNumeric() || peekNextChar() == '('
+			    ) && (
+			        previousToken == null ||
+			        previousToken.type == TokenType.LEFT_PAREN ||
+			        previousToken.type == TokenType.COMMA ||
+			        previousToken.type == TokenType.OPERATOR
+			    )
+			) {
 				token += '-';
 				pos++;
-				token += next();
+				token += next().text;
+				return previousToken = new Token(TokenType.NUMBERX, token);
 			}
-			else if (ch.isAlpha() || (ch == '_')) {
-				while (ch != '' && (ch.isAlpha() || ch.isNumeric() || (ch == '_')) && (pos < input.length())) {
+			else if (ch == '_' || ch.isAlpha()) {
+				while (ch != '' && (ch.isAlphaNumeric() || ch == '_' || ch == '.') && pos < input.length()) {
 					token += charAt(input, pos++);
 					ch = pos == input.length() ? '' : charAt(input, pos);
 				}
+				if (expr.variables.containsKey(token.toUpperCase())) {
+					return previousToken = new Token(TokenType.VARIABLE, token);
+				}
+				else if (functions.containsKey(token.toUpperCase())) {
+					return previousToken = new Token(TokenType.FUNCTION, token);
+				}
+				throw new ExpressionException('Unknown function or variable \'' + token + '\' at position ' + (pos - token.length() + 1));
 			}
-			else if (ch == '(' || ch == ')' || ch == ',') {
-				token += ch;
+			else if (ch == '(') {
 				pos++;
+				return previousToken = new Token(TokenType.LEFT_PAREN, '(');
+			}
+			else if (ch == ')') {
+				pos++;
+				return previousToken = new Token(TokenType.RIGHT_PAREN, ')');
+			}
+			else if (ch == ',') {
+				pos++;
+				return previousToken = new Token(TokenType.COMMA, ',');
 			}
 			else {
-				while (ch != '' && !ch.isAlpha() && !ch.isNumeric()
-				       && ch != '_' && !ch.isWhitespace()
-				       && ch != '(' && ch != ')' && ch != ','
-				       && (pos < input.length())) {
+				while (ch != '' && !ch.isAlphanumericSpace() && !'_(),'.contains(ch) && pos < input.length()) {
 					token += charAt(input, pos);
 					pos++;
 					ch = pos == input.length() ? '' : charAt(input, pos);
@@ -817,8 +914,8 @@ public class RT_Expression implements IExpression {
 				if (!operators.containsKey(token)) {
 					throw new ExpressionException('Unknown operator \'' + token + '\' at position ' + (pos - token.length() + 1));
 				}
+				return previousToken = new Token(TokenType.OPERATOR, token);
 			}
-			return previousToken = token;
 		}
 		
 		/**
@@ -834,7 +931,10 @@ public class RT_Expression implements IExpression {
 	/**
 	 * Expression assoc
 	 */
-	public enum Associability { LEFT, RIGHT }
+	public enum Associability {
+		LEFT,
+		RIGHT
+	}
 	
 	/**
 	 * MathContext container
@@ -853,7 +953,7 @@ public class RT_Expression implements IExpression {
 		public AddOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			return round(v1 + v2, mc);
 		}
 	}
@@ -862,7 +962,7 @@ public class RT_Expression implements IExpression {
 		public SubtractOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			return round(v1 - v2, mc);
 		}
 	}
@@ -871,7 +971,7 @@ public class RT_Expression implements IExpression {
 		public MultiplyOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			return round(v1 * v2, mc);
 		}
 	}
@@ -880,7 +980,7 @@ public class RT_Expression implements IExpression {
 		public DivideOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			return v1.divide(v2, mc.precision, mc.roundingMode);
 		}
 	}
@@ -889,7 +989,7 @@ public class RT_Expression implements IExpression {
 		public ModOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			Decimal d = v1 - (v2 * (v1 / v2).intValue());
 			return round(d, mc);
 		}
@@ -899,7 +999,7 @@ public class RT_Expression implements IExpression {
 		public PowOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			return round(Decimal.valueOf(Math.pow(v1.doubleValue(), v2.doubleValue())), mc);
 		}
 	}
@@ -908,7 +1008,7 @@ public class RT_Expression implements IExpression {
 		public AndOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			Boolean b1 = v1 != ZERO;
 			Boolean b2 = v2 != ZERO;
 			return b1 && b2 ? ONE : ZERO;
@@ -919,7 +1019,7 @@ public class RT_Expression implements IExpression {
 		public OrOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			Boolean b1 = v1 != ZERO;
 			Boolean b2 = v2 != ZERO;
 			return b1 || b2 ? ONE : ZERO;
@@ -930,7 +1030,7 @@ public class RT_Expression implements IExpression {
 		public GreaterOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			return v1 > v2 ? ONE : ZERO;
 		}
 	}
@@ -939,7 +1039,7 @@ public class RT_Expression implements IExpression {
 		public GreaterOrEqualOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			return v1 >= v2 ? ONE : ZERO;
 		}
 	}
@@ -948,7 +1048,7 @@ public class RT_Expression implements IExpression {
 		public LessOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			return v1 < v2 ? ONE : ZERO;
 		}
 	}
@@ -957,7 +1057,7 @@ public class RT_Expression implements IExpression {
 		public LessEqualOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			return v1 <= v2 ? ONE : ZERO;
 		}
 	}
@@ -966,7 +1066,7 @@ public class RT_Expression implements IExpression {
 		public EqualOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			return v1 == v2 ? ONE : ZERO;
 		}
 	}
@@ -975,7 +1075,7 @@ public class RT_Expression implements IExpression {
 		public NotEqualOperator(String oper, Integer precedence, Associability assoc) {
 			super(oper, precedence, assoc);
 		}
-		public override Decimal eval(Decimal v1, Decimal v2, MathContext mc) {
+		public override Decimal apply(Decimal v1, Decimal v2, MathContext mc) {
 			return v1 != v2 ? ONE : ZERO;
 		}
 	}
@@ -984,8 +1084,8 @@ public class RT_Expression implements IExpression {
 		public NotFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
-			verifyFunctionParams('IF', numParams, parameters.size());
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
+			verifyFunctionParams('NOT', numParams, parameters.size());
 			Boolean isZero = parameters.get(0) == ZERO;
 			return isZero ? ONE : ZERO;
 		}
@@ -995,7 +1095,7 @@ public class RT_Expression implements IExpression {
 		public IfFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('IF', numParams, parameters.size());
 			Boolean isTrue = parameters.get(0) != ZERO;
 			return isTrue ? parameters.get(1) : parameters.get(2);
@@ -1006,7 +1106,7 @@ public class RT_Expression implements IExpression {
 		public RandomFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('RANDOM', numParams, parameters.size());
 			Decimal d = Decimal.valueOf(Math.random());
 			return round(d, mc);
@@ -1017,7 +1117,7 @@ public class RT_Expression implements IExpression {
 		public SinFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('SIN', numParams, parameters.size());
 			Decimal d = Math.sin(toRadians(parameters.get(0)));
 			return round(d, mc);
@@ -1028,7 +1128,7 @@ public class RT_Expression implements IExpression {
 		public CosFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('COS', numParams, parameters.size());
 			Decimal d = Math.cos(toRadians(parameters.get(0)));
 			return round(d, mc);
@@ -1039,7 +1139,7 @@ public class RT_Expression implements IExpression {
 		public TanFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('TAN', numParams, parameters.size());
 			Decimal d = Math.tan(toRadians(parameters.get(0)));
 			return round(d, mc);
@@ -1050,7 +1150,7 @@ public class RT_Expression implements IExpression {
 		public AsinFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('ASIN', numParams, parameters.size());
 			Decimal d = toDegrees(Math.asin(parameters.get(0)));
 			return round(d, mc);
@@ -1061,7 +1161,7 @@ public class RT_Expression implements IExpression {
 		public AcosFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('ACOS', numParams, parameters.size());
 			Decimal d = toDegrees(Math.acos(parameters.get(0)));
 			return round(d, mc);
@@ -1072,7 +1172,7 @@ public class RT_Expression implements IExpression {
 		public AtanFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('ATAN', numParams, parameters.size());
 			Decimal d = toDegrees(Math.atan(parameters.get(0)));
 			return round(d, mc);
@@ -1083,7 +1183,7 @@ public class RT_Expression implements IExpression {
 		public SinhFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('SINH', numParams, parameters.size());
 			Decimal d = Math.sinh(parameters.get(0));
 			return round(d, mc);
@@ -1094,7 +1194,7 @@ public class RT_Expression implements IExpression {
 		public CoshFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('COSH', numParams, parameters.size());
 			Decimal d = Math.cosh(parameters.get(0));
 			return round(d, mc);
@@ -1105,7 +1205,7 @@ public class RT_Expression implements IExpression {
 		public TanhFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('TANH', numParams, parameters.size());
 			Decimal d = Math.tanh(parameters.get(0));
 			return round(d, mc);
@@ -1116,7 +1216,7 @@ public class RT_Expression implements IExpression {
 		public RadFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('RAD', numParams, parameters.size());
 			Decimal d = toRadians(parameters.get(0));
 			return round(d, mc);
@@ -1127,7 +1227,7 @@ public class RT_Expression implements IExpression {
 		public DegFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('DEG', numParams, parameters.size());
 			Decimal d = toDegrees(parameters.get(0));
 			return round(d, mc);
@@ -1138,7 +1238,7 @@ public class RT_Expression implements IExpression {
 		public MaxFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('MAX', numParams, parameters.size());
 			Decimal max;
 			for (Decimal parameter : parameters) {
@@ -1154,7 +1254,7 @@ public class RT_Expression implements IExpression {
 		public MinFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('MIN', numParams, parameters.size());
 			Decimal min;
 			for (Decimal parameter : parameters) {
@@ -1170,7 +1270,7 @@ public class RT_Expression implements IExpression {
 		public AbsFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('ABS', numParams, parameters.size());
 			return round(parameters.get(0).abs(), mc);
 		}
@@ -1180,7 +1280,7 @@ public class RT_Expression implements IExpression {
 		public LogFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('LOG', numParams, parameters.size());
 			Decimal d = Math.log(parameters.get(0));
 			return round(d, mc);
@@ -1191,7 +1291,7 @@ public class RT_Expression implements IExpression {
 		public Log10Function(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('LOG10', numParams, parameters.size());
 			Decimal d = Math.log10(parameters.get(0));
 			return round(d, mc);
@@ -1202,7 +1302,7 @@ public class RT_Expression implements IExpression {
 		public RoundFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('ROUND', numParams, parameters.size());
 			Decimal d = parameters.get(0);
 			Integer scale = parameters.get(1).intValue();
@@ -1214,7 +1314,7 @@ public class RT_Expression implements IExpression {
 		public FloorFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('FLOOR', numParams, parameters.size());
 			Decimal d = parameters.get(0);
 			return d.setScale(0, RoundingMode.FLOOR);
@@ -1225,7 +1325,7 @@ public class RT_Expression implements IExpression {
 		public CeilingFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('CEILING', numParams, parameters.size());
 			Decimal d = parameters.get(0);
 			return d.setScale(0, RoundingMode.CEILING);
@@ -1236,7 +1336,7 @@ public class RT_Expression implements IExpression {
 		public SqrtFunction(String name, Integer numParams) {
 			super(name, numParams);
 		}
-		public override Decimal eval(List<Decimal> parameters, MathContext mc) {
+		public override Decimal apply(List<Decimal> parameters, MathContext mc) {
 			verifyFunctionParams('SQRT', numParams, parameters.size());
 			Decimal d = Math.sqrt(parameters.get(0));
 			return round(d, mc);
@@ -1265,7 +1365,7 @@ public class RT_Expression implements IExpression {
 	public class ExpressionException extends Exception {}
 	
 	/**
-	 * UnsupportedOperationException
+	 * IllegalStateException
 	 */
-	public class UnsupportedOperationException extends Exception {}
+	public class IllegalStateException extends Exception {}
 }
