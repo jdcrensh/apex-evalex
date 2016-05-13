@@ -217,10 +217,7 @@ public class RT_Expression implements IExpression {
 		Token previousToken;
 		while (tokenizer.hasNext()) {
 			Token token = tokenizer.next();
-			if (token.type == TokenType.NUMBERX) {
-				outputQueue.add(token);
-			}
-			else if (token.type == TokenType.VARIABLE) {
+			if (token.type == TokenType.NUMBERX || token.type == TokenType.VARIABLE) {
 				outputQueue.add(token);
 			}
 			else if (token.type == TokenType.FUNCTION) {
@@ -228,8 +225,8 @@ public class RT_Expression implements IExpression {
 				lastFunction = token;
 			}
 			else if (token.type == TokenType.COMMA) {
-				while (!stack.empty() && ((Token) stack.peek()).type != TokenType.LEFT_PAREN) {
-					outputQueue.add((Token) stack.pop());
+				while (!stack.empty() && peekTokenType(stack) != TokenType.LEFT_PAREN) {
+					outputQueue.add(popToken(stack));
 				}
 				if (stack.empty()) {
 					throw new ExpressionException('Parse error for function \'' + (lastFunction == null ? null : lastFunction.text) + '\'');
@@ -237,7 +234,7 @@ public class RT_Expression implements IExpression {
 			}
 			else if (token.type == TokenType.OPERATOR) {
 				Operator o1 = operators.get(token.text);
-				Token token2 = stack.empty() ? null : (Token) stack.peek();
+				Token token2 = stack.empty() ? null : peekToken(stack);
 				while (
 				    token2 != null &&
 				    token2.type == TokenType.OPERATOR && (
@@ -245,8 +242,8 @@ public class RT_Expression implements IExpression {
 				        o1.getPrecedence() < operators.get(token2.text).getPrecedence()
 				    )
 				) {
-					outputQueue.add((Token) stack.pop());
-					token2 = stack.empty() ? null : (Token) stack.peek();
+					outputQueue.add(popToken(stack));
+					token2 = stack.empty() ? null : peekToken(stack);
 				}
 				stack.push(token);
 			}
@@ -264,21 +261,21 @@ public class RT_Expression implements IExpression {
 				stack.push(token);
 			}
 			else if (token.type == TokenType.RIGHT_PAREN) {
-				while (!stack.empty() && ((Token) stack.peek()).type != TokenType.LEFT_PAREN) {
-					outputQueue.add((Token) stack.pop());
+				while (!stack.empty() && peekTokenType(stack) != TokenType.LEFT_PAREN) {
+					outputQueue.add(popToken(stack));
 				}
 				if (stack.empty()) {
 					throw new ExpressionException('Mismatched parentheses');
 				}
 				stack.pop();
-				if (!stack.empty() && ((Token) stack.peek()).type == TokenType.FUNCTION) {
-					outputQueue.add((Token) stack.pop());
+				if (!stack.empty() && peekTokenType(stack) == TokenType.FUNCTION) {
+					outputQueue.add(popToken(stack));
 				}
 			}
 			previousToken = token;
 		}
 		while (!stack.empty()) {
-			Token element = (Token) stack.pop();
+			Token element = popToken(stack);
 			if (element.type == TokenType.LEFT_PAREN || element.type == TokenType.RIGHT_PAREN) {
 				throw new ExpressionException('Mismatched parentheses');
 			}
@@ -288,6 +285,18 @@ public class RT_Expression implements IExpression {
 			outputQueue.add(element);
 		}
 		return outputQueue;
+	}
+
+	private static Token peekToken(RT_Stack stack) {
+		return (Token) stack.peek();
+	}
+
+	private static Token popToken(RT_Stack stack) {
+		return (Token) stack.pop();
+	}
+
+	private static TokenType peekTokenType(RT_Stack stack) {
+		return peekToken(stack).type;
 	}
 	
 	/**
@@ -300,9 +309,10 @@ public class RT_Expression implements IExpression {
 		
 		for (Token token : rpn) {
 			if (token.type == TokenType.OPERATOR) {
-				Decimal v1 = (Decimal) stack.pop();
-				Decimal v2 = (Decimal) stack.pop();
-				stack.push(operators.get(token.text).apply(nullValue(v2), nullValue(v1), this.mc));
+				Decimal v1 = nullValue((Decimal) stack.pop());
+				Decimal v2 = nullValue((Decimal) stack.pop());
+				Operator op = operators.get(token.text);
+				stack.push(op.apply(v2, v1, this.mc));
 			}
 			else if (token.type == TokenType.VARIABLE) {
 				Decimal val = nullValue(variables.get(token.text));
@@ -784,8 +794,7 @@ public class RT_Expression implements IExpression {
 		RIGHT_PAREN,
 		COMMA,
 		NUMBERX,
-		STRINGX,
-		UNKNOWN
+		STRINGX
 	}
 	
 	/**
