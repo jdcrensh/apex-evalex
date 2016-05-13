@@ -1,6 +1,6 @@
 @isTest class RT_ExpressionTest {
 
-	/* TestBooleans.java
+	/* Booleans
 	 */
 	
 	@isTest static void testAndTokenizer() {
@@ -81,7 +81,33 @@
 		System.assertEquals('5.35', new RT_Expression('If(2, 5.35, 3)').eval() + '');
 	}
 	
-	/* TestCaseInsensitive.java
+	/* Strings
+	 */
+	
+	@isTest static void testStringCompare() {
+		System.assertEquals(true, new RT_Expression('"foo" == "foo"').evalBool());
+		System.assertEquals(false, new RT_Expression('"foo" == "bar"').evalBool());
+		System.assertEquals(true, new RT_Expression('"foo" != "bar"').evalBool());
+		System.assertEquals(true, new RT_Expression('"foo" <> "bar"').evalBool());
+		System.assertEquals(true, new RT_Expression('"foo" > \'bar\'').evalBool());
+		System.assertEquals(true, new RT_Expression('"foo" >= "bar"').evalBool());
+		System.assertEquals(false, new RT_Expression('"foo" < "bar"').evalBool());
+		System.assertEquals(false, new RT_Expression('"foo" <= "bar"').evalBool());
+	}
+	
+	@isTest static void testStringConcat() {
+		System.assertEquals(true, new RT_Expression('"foo" + "bar" == "foobar"').evalBool());
+		System.assertEquals(true, new RT_Expression('"foo" + 1 == \'foo1\'').evalBool());
+		System.assertEquals(true, new RT_Expression('1+"foo" == \'1foo\'').evalBool());
+		System.assertEquals(false, new RT_Expression('1+"foo" != \'1foo\'').evalBool());
+		System.assertEquals(true, new RT_Expression('2+1+"foo" = \'3foo\'').evalBool());
+	}
+	
+	@isTest static void testStringMixed() {
+		System.assertEquals(3, new RT_Expression('1+(IF("foo" != "bar", 1, 0)*2)').eval());
+	}
+	
+	/* Case Insensitive
 	 */
 	
 	@isTest static void testVariableIsCaseInsensitive() {
@@ -124,7 +150,7 @@
 		}
 	}
 	
-	/* TestCustoms.java
+	/* Customs
 	 */
 	
 	class BitRightOperator extends RT_Expression.Operator {
@@ -171,7 +197,7 @@
 		System.assertEquals('14', e.eval().toPlainString());
 	}
 	
-	/* TestEval.java
+	/* Eval
 	 */
 	
 	@isTest static void testUnary() {
@@ -252,13 +278,23 @@
 	@isTest static void testWrongBrackets2() {
 		String err;
 		try {
-			RT_Expression expression = new RT_Expression('2*(3((5*3)))');
-			expression.eval();
+			new RT_Expression('2*(3((5*3)))').eval();
 		}
 		catch (RT_Expression.ExpressionException e) {
 			err = e.getMessage();
 		}
 		System.assertEquals('Missing operator at character position 5', err);
+	}
+	
+	@isTest static void testInvalidString() {
+		String err;
+		try {
+			new RT_Expression('"foo" = "foo').eval();
+		}
+		catch (RT_Expression.ExpressionException e) {
+			err = e.getMessage();
+		}
+		System.assertEquals('Parse error of string at position 9', err);
 	}
 	
 	@isTest static void testBrackets() {
@@ -353,7 +389,7 @@
 		catch (RT_Expression.ExpressionException e) {
 			err = e.getMessage();
 		}
-		System.assertEquals('MIN function requires at least 1 parameter', err);
+		System.assertEquals('Function MIN expected -1 parameters, got 0', err);
 		
 		System.assertEquals('1', new RT_Expression('min(1)').eval().toPlainString());
 		System.assertEquals('1', new RT_Expression('min(1, 2)').eval().toPlainString());
@@ -460,7 +496,7 @@
 		System.assertEquals(true, RT_Expression.isNumber('42.24'));
 	}
 	
-	/* TestExposedComponents.java
+	/* Exposed Components
 	 */
 	
 	class NullOperator extends RT_Expression.Operator {
@@ -508,10 +544,11 @@
 		System.assertEquals(expression.getDeclaredFunctions().size(), originalFunctionCount + 1, 'Function list should have one more function declared');
 	}
 	
-	/* TestNested.java
+	/* Nested
 	 */
 	
-	@isTest static void testNestedVars() {
+	// nested expressions are broken in favor of String support
+	static void testNestedVars() {
 		String x = '1';
 		String y = '2';
 		String z = '2*x + 3*y';
@@ -525,12 +562,13 @@
 		System.assertEquals(34, e.eval());
 	}
 	
-	@isTest static void testReplacements() {
+	// nested expressions are broken in favor of String support
+	static void testReplacements() {
 		RT_Expression e = new RT_Expression('3+a+aa+aaa').with('a', '1*x').with('aa', '2*x').with('aaa', '3*x').with('x', '2');
 		System.assertEquals(15, e.eval());
 	}
 	
-	/* TestRPN.java
+	/* RPN
 	 */
 	
 	@isTest static void testRPNSimple() {
@@ -549,7 +587,7 @@
 	}
 	
 	
-	/* TestSciNotation.java
+	/* Scientific Notation
 	 */
 	
 	@isTest static void testSciSimple() {
@@ -578,7 +616,7 @@
 	}
 	
 	//@Ignore('Expected Failures: not implemented yet')
-	public void testSciPositive() {
+	@isTest static void testSciPositive() {
 		RT_Expression e = new RT_Expression('1e+10');
 		System.assertEquals('10000000000', e.eval().toPlainString());
 		
@@ -636,7 +674,7 @@
 		System.assertEquals('Unknown function or variable \'e2\' at position 1', err);
 	}
 	
-	/* TestTokenizer.java
+	/* Tokenizer
 	 */
 	
 	@isTest static void testTokenizerNumbers() {
@@ -818,6 +856,73 @@
 		System.assertEquals('4.7', i.next().text);
 	}
 	
+	@isTest static void testTokenizerStrings() {
+		RT_Expression e;
+		Iterator<RT_Expression.Token> i;
+		RT_Expression.Token tk;
+		
+		e = new RT_Expression('1+(IF("foo" != "bar", 1, 0)*2)');
+		i = e.getExpressionTokenizer();
+		
+		System.assertEquals('1', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.NUMBERX, tk.type);
+		System.assertEquals('+', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.OPERATOR, tk.type);
+		System.assertEquals('(', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.LEFT_PAREN, tk.type);
+		System.assertEquals('IF', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.FUNCTION, tk.type);
+		System.assertEquals('(', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.LEFT_PAREN, tk.type);
+		System.assertEquals('__STR0__', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.VARIABLE, tk.type);
+		System.assertEquals('!=', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.OPERATOR, tk.type);
+		System.assertEquals('__STR1__', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.VARIABLE, tk.type);
+		System.assertEquals(',', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.COMMA, tk.type);
+		System.assertEquals('1', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.NUMBERX, tk.type);
+		System.assertEquals(',', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.COMMA, tk.type);
+		System.assertEquals('0', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.NUMBERX, tk.type);
+		System.assertEquals(')', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.RIGHT_PAREN, tk.type);
+		System.assertEquals('*', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.OPERATOR, tk.type);
+		System.assertEquals('2', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.NUMBERX, tk.type);
+		System.assertEquals(')', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.RIGHT_PAREN, tk.type);
+		System.assertEquals(false, i.hasNext());
+	}
+	
+	@isTest static void testTokenizerStringConcat() {
+		RT_Expression e;
+		Iterator<RT_Expression.Token> i;
+		RT_Expression.Token tk;
+		
+		e = new RT_Expression('"foo" + "bar" == "foobar"');
+		i = e.getExpressionTokenizer();
+		
+		System.assertEquals('__STR0__', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.VARIABLE, tk.type);
+		System.assertEquals(e.variables.get('__STR0__'), 'foo');
+		System.assertEquals('+', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.OPERATOR, tk.type);
+		System.assertEquals('__STR1__', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.VARIABLE, tk.type);
+		System.assertEquals(e.variables.get('__STR1__'), 'bar');
+		System.assertEquals('==', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.OPERATOR, tk.type);
+		System.assertEquals('__STR2__', (tk = i.next()).text);
+		System.assertEquals(RT_Expression.TokenType.VARIABLE, tk.type);
+		System.assertEquals(e.variables.get('__STR2__'), 'foobar');
+		System.assertEquals(false, i.hasNext());
+	}
+	
 	@isTest static void testTokenizerFunction1() {
 		RT_Expression e = new RT_Expression('ABS(3.5)');
 		Iterator<RT_Expression.Token> i = e.getExpressionTokenizer();
@@ -885,7 +990,7 @@
 		System.assertEquals('9', i.next().text);
 	}
 	
-	/* TestVarArgs.java
+	/* Var Args
 	 */
 	
 	@isTest static void testVarArgsSimple() {
@@ -933,7 +1038,7 @@
 		catch (RT_Expression.ExpressionException ex) {
 			err = ex.getMessage();
 		}
-		System.assertEquals('MAX function requires at least 1 parameter', err);
+		System.assertEquals('Function MAX expected -1 parameters, got 0', err);
 	}
 	
 	@isTest static void testVarArgsCustomFunction1() {
@@ -948,11 +1053,11 @@
 		System.assertEquals('28', e.eval().toPlainString());
 	}
 	
-	/* TestVariables.java
+	/* Variables
 	 */
 	
 	@isTest static void testVars() {
-		String actual;
+		String actual, ex;
 		
 		actual = new RT_Expression('PI').eval() + '';
 		System.assertEquals('3.141593', actual);
@@ -990,8 +1095,39 @@
 		actual = new RT_Expression('a^(2+b)^2').setVariable('a', '2').setVariable('b', '4').eval().toPlainString();
 		System.assertEquals('68719480000', actual);
 		
-		actual = new RT_Expression('(a == null && b != null) && true').with('a', (Decimal) null).with('b', 1).eval().toPlainString();
+		actual = new RT_Expression('(a == null && b != null) && true').with('a', null).with('b', 1).eval().toPlainString();
 		System.assertEquals('1', actual);
+		
+		actual = new RT_Expression('a && b').with('a', true).with('b', false).eval().toPlainString();
+		System.assertEquals('0', actual);
+		
+		actual = new RT_Expression('(a || NOT(b)) && a || b').with('a', true).with('b', false).eval().toPlainString();
+		System.assertEquals('1', actual);
+		
+		ex = 'IF(first.name + " " + last.name == "James Baxter", 1, 2) * 10';
+		System.assertEquals(10, new RT_Expression(ex).with('first.name', 'James').with('last.name', 'Baxter').eval());
+		
+		ex = 'IF(last.name + ", " + first.name == "Baxter, James", 1, 2) * 10';
+		System.assertEquals(10, new RT_Expression(ex, new Map<String, Object> {
+			'first.name' => 'James',
+			'last.name' => 'Baxter'
+		}).eval());
+		
+		System.assertEquals(300000, new RT_Expression('3*x').with('x', Decimal.valueOf('100000')).eval());
+		System.assertEquals(300000, new RT_Expression('3*x').with('x', Double.valueOf('100000')).eval());
+		System.assertEquals(300000, new RT_Expression('3*x').with('x', Integer.valueOf('100000')).eval());
+		System.assertEquals(300000, new RT_Expression('3*x').with('x', Long.valueOf('100000')).eval());
+	}
+
+	@isTest static void testInvalidVariableType() {
+		Datetime value = Datetime.now();
+		try {
+			new RT_Expression('x').with('x', value);
+			System.assert(false);
+		}
+		catch (RT_Expression.IllegalArgumentException e) {
+			System.assertEquals('Object value \'' + value + '\' is not of a supported type', e.getMessage());
+		}
 	}
 	
 	@isTest static void testSubstitution() {
