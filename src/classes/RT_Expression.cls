@@ -53,6 +53,11 @@ public class RT_Expression implements IExpression {
 	private static Map<String, Operator> operators;
 	
 	/**
+	 * All defined operators with name and implementation
+	 */
+	private static Map<String, UnaryOperator> unaryOperators;
+	
+	/**
 	 * All defined functions with name and implementation
 	 */
 	private static Map<String, Function> functions;
@@ -72,6 +77,7 @@ public class RT_Expression implements IExpression {
 		MIN_INTEGER = MAX_INTEGER + 1;
 		
 		operators = new Map<String, Operator>();
+		unaryOperators = new Map<String, UnaryOperator>();
 		functions = new Map<String, Function>();
 		
 		caseInsensitiveTokens = new Set<TokenType> {
@@ -104,6 +110,10 @@ public class RT_Expression implements IExpression {
 		addOperator(new EqualOperator('==', 7, Associability.RIGHT));
 		addOperator(new NotEqualOperator('!=', 7, Associability.RIGHT));
 		addOperator(new NotEqualOperator('<>', 7, Associability.RIGHT));
+		
+		// default unary operators
+		addUnaryOperator(new PositiveOperator('+'));
+		addUnaryOperator(new NegativeOperator('-'));
 		
 		// default functions
 		addFunction(new NotFunction('NOT', 1));
@@ -250,13 +260,7 @@ public class RT_Expression implements IExpression {
 			else if (token.type == TokenType.OPERATOR) {
 				Operator o1 = operators.get(token.text);
 				Token token2 = stack.empty() ? null : peekToken(stack);
-				while (
-				    token2 != null &&
-				    token2.type == TokenType.OPERATOR && (
-				        o1.isLeftAssoc() && o1.getPrecedence() <= operators.get(token2.text).getPrecedence() ||
-				        o1.getPrecedence() < operators.get(token2.text).getPrecedence()
-				    )
-				) {
+				while (token2 != null && token2.type == TokenType.OPERATOR && isHigherPriority(o1, operators.get(token2.text))) {
 					outputQueue.add(popToken(stack));
 					token2 = stack.empty() ? null : peekToken(stack);
 				}
@@ -297,6 +301,11 @@ public class RT_Expression implements IExpression {
 			outputQueue.add(element);
 		}
 		return outputQueue;
+	}
+	
+	private static Boolean isHigherPriority(Operator o1, Operator o2) {
+		return o1.isLeftAssoc() && o1.getPrecedence() <= o2.getPrecedence() ||
+		       o1.getPrecedence() < o2.getPrecedence();
 	}
 	
 	private static Token peekToken(RT_Stack stack) {
@@ -407,7 +416,7 @@ public class RT_Expression implements IExpression {
 	}
 	
 	/**
-	 * Adds an operator to the list of supported operators
+	 * Adds to the list of supported operators
 	 *
 	 * @param operator The operator to add
 	 * @return the previous operator with that name, or `null` if there was none
@@ -417,7 +426,17 @@ public class RT_Expression implements IExpression {
 	}
 	
 	/**
-	 * Adds a function to the list of supported functions
+	 * Adds to the list of supported unary operators
+	 *
+	 * @param operator The operator to add
+	 * @return the previous operator with that name, or `null` if there was none
+	 */
+	public static UnaryOperator addUnaryOperator(UnaryOperator operator) {
+		return unaryOperators.put(operator.getOper(), operator);
+	}
+	
+	/**
+	 * Adds to the list of supported functions
 	 *
 	 * @param function The function to add
 	 * @return the previous operator with that name, or `null` if there was none
@@ -740,14 +759,24 @@ public class RT_Expression implements IExpression {
 	}
 	
 	/**
-	 * Abstract definition of a supported operator. An operator is defined by
-	 * its name (pattern), precedence, and if it is left or right associative.
+	 * Base definition of a supported operator
 	 */
-	public abstract class Operator {
+	public abstract class BaseOperator {
 		/**
 		 * This operators name (pattern).
 		 */
 		protected String oper;
+		
+		public String getOper() {
+			return oper;
+		}
+	}
+	
+	/**
+	 * Abstract definition of a supported operator. An operator is defined by
+	 * its name (pattern), precedence, and if it is left or right associative.
+	 */
+	public abstract class Operator extends BaseOperator {
 		/**
 		 * Operators precedence.
 		 */
@@ -770,10 +799,6 @@ public class RT_Expression implements IExpression {
 			this.assoc = assoc;
 		}
 		
-		public String getOper() {
-			return oper;
-		}
-		
 		public Integer getPrecedence() {
 			return precedence;
 		}
@@ -790,6 +815,28 @@ public class RT_Expression implements IExpression {
 		 * @return result of the operation
 		 */
 		public abstract Object apply(Object v1, Object v2, MathContext mc);
+	}
+	
+	/**
+	 * Abstract definition of a supported unary operator
+	 */
+	public abstract class UnaryOperator extends BaseOperator {
+		/**
+		 * Creates a new operator.
+		 *
+		 * @param oper operator name (pattern)
+		 */
+		public UnaryOperator(String oper) {
+			this.oper = oper;
+		}
+		
+		/**
+		 * Implementation for this unary operator
+		 *
+		 * @param v operand
+		 * @return result of the operation
+		 */
+		public abstract Object apply(Object v);
 	}
 	
 	public class Token {
@@ -888,7 +935,7 @@ public class RT_Expression implements IExpression {
 				return previousToken = new Token(TokenType.NUMBERX, token);
 			}
 			else if (
-			    ch == '-' && (
+			    unaryOperators.containsKey(ch) && (
 			        peekNextChar().isNumeric() || peekNextChar() == '('
 			    ) && (
 			        previousToken == null ||
@@ -897,7 +944,7 @@ public class RT_Expression implements IExpression {
 			        previousToken.type == TokenType.OPERATOR
 			    )
 			) {
-				token += '-';
+				token += ch;
 				pos++;
 				token += next().text;
 				return previousToken = new Token(TokenType.NUMBERX, token);
@@ -914,7 +961,7 @@ public class RT_Expression implements IExpression {
 				else {
 					throw new ExpressionException('Parse error of string at position ' + (pos - token.length()));
 				}
-				String var = '__STR' + (expr.stringVarCount++) + '__';
+				String var = stringVariable(expr.stringVarCount++);
 				expr.setVariable(var, token);
 				return previousToken = new Token(TokenType.VARIABLE, var);
 			}
@@ -947,7 +994,7 @@ public class RT_Expression implements IExpression {
 				while (ch != '' && !ch.isAlphanumericSpace() && !'_(),"\''.contains(ch) && pos < input.length()) {
 					token += charAt(input, pos++);
 					ch = pos == input.length() ? '' : charAt(input, pos);
-					if (ch == '-') {
+					if (unaryOperators.containsKey(ch)) {
 						break;
 					}
 				}
@@ -966,6 +1013,10 @@ public class RT_Expression implements IExpression {
 		public Integer getPos() {
 			return pos;
 		}
+	}
+	
+	private static String stringVariable(Integer i) {
+		return '__STR' + i + '__';
 	}
 	
 	/**
@@ -1142,6 +1193,26 @@ public class RT_Expression implements IExpression {
 		}
 		public override Object apply(Object v1, Object v2, MathContext mc) {
 			return v1 != v2 ? ONE : ZERO;
+		}
+	}
+	
+	public class PositiveOperator extends UnaryOperator {
+		public PositiveOperator(String oper) {
+			super(oper);
+		}
+		public override Object apply(Object v) {
+			Decimal d = (Decimal) v;
+			return +d;
+		}
+	}
+	
+	public class NegativeOperator extends UnaryOperator {
+		public NegativeOperator(String oper) {
+			super(oper);
+		}
+		public override Object apply(Object v) {
+			Decimal d = (Decimal) v;
+			return -d;
 		}
 	}
 	

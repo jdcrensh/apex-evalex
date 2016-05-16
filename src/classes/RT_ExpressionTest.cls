@@ -201,9 +201,10 @@
 	 */
 	
 	@isTest static void testUnary() {
-		System.assertEquals('2', new RT_Expression('-3+5').eval().toPlainString());
-		System.assertEquals('-30', new RT_Expression('-5+(-25)').eval().toPlainString());
-		System.assertEquals('125', new RT_Expression('-5*(-25)').eval().toPlainString());
+		System.assertEquals(2, new RT_Expression('-3+5').eval());
+		System.assertEquals(-30, new RT_Expression('-5+(-25)').eval());
+		System.assertEquals(125, new RT_Expression('-5*(-25)').eval());
+		System.assertEquals(-1, new RT_Expression('0-x').with('x', 1).eval());
 	}
 	
 	@isTest static void testInvalidExpressions1() {
