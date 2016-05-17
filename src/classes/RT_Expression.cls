@@ -341,6 +341,9 @@ public class RT_Expression implements IExpression {
 				Operator op = operators.get(token.text);
 				stack.push(op.apply(v2, v1, this.mc));
 			}
+			else if (token.type == TokenType.UNDEFINED) {
+				stack.push(0);
+			}
 			else if (token.type == TokenType.VARIABLE) {
 				Object val = variables.get(token.text);
 				if (val instanceof String && isNumber((String) val)) {
@@ -676,6 +679,21 @@ public class RT_Expression implements IExpression {
 	}
 	
 	/**
+	 * Returns a set of variable names referenced in the expression string
+	 */
+	public Set<String> getReferencedVariables() {
+		Set<String> vars = new Set<String>();
+		Tokenizer tokenizer = new Tokenizer(this.expression, this);
+		while (tokenizer.hasNext()) {
+			Token token = tokenizer.next();
+			if (token.type == TokenType.VARIABLE || token.type == TokenType.UNDEFINED) {
+				vars.add(token.text);
+			}
+		}
+		return vars;
+	}
+	
+	/**
 	 * Exposing declared operators in the expression
 	 * @return declared operators
 	 */
@@ -857,7 +875,8 @@ public class RT_Expression implements IExpression {
 		LEFT_PAREN,
 		RIGHT_PAREN,
 		COMMA,
-		NUMBERX
+		NUMBERX,
+		UNDEFINED
 	}
 	
 	/**
@@ -976,7 +995,11 @@ public class RT_Expression implements IExpression {
 				else if (functions.containsKey(token.toUpperCase())) {
 					return previousToken = new Token(TokenType.FUNCTION, token);
 				}
-				throw new ExpressionException('Unknown function or variable \'' + token + '\' at position ' + (pos - token.length() + 1));
+				else if (ch != '(') {
+					expr.setVariable(token, null);
+					return previousToken = new Token(TokenType.VARIABLE, token);
+				}
+				throw new ExpressionException('Unknown function \'' + token + '\' at position ' + (pos - token.length() + 1));
 			}
 			else if (ch == '(') {
 				pos++;

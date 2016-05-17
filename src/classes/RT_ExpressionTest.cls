@@ -663,16 +663,21 @@
 		catch (TypeException expected) {}
 	}
 	
-	@isTest static void testSciError3() {
+	@isTest static void testUnknownFunction() {
 		String err;
-		RT_Expression e = new RT_Expression('e2');
+		RT_Expression e = new RT_Expression('a + invalid()');
 		try {
 			e.eval();
 		}
 		catch (RT_Expression.ExpressionException ex) {
 			err = ex.getMessage();
 		}
-		System.assertEquals('Unknown function or variable \'e2\' at position 1', err);
+		System.assertEquals('Unknown function \'invalid\' at position 5', err);
+	}
+
+	@isTest static void testUndefinedVariable() {
+		System.assertEquals(true, new RT_Expression('a == null').evalBool());
+		System.assertEquals(0, new RT_Expression('a + b').eval());
 	}
 	
 	/* Tokenizer
@@ -1118,6 +1123,15 @@
 		System.assertEquals(300000, new RT_Expression('3*x').with('x', Double.valueOf('100000')).eval());
 		System.assertEquals(300000, new RT_Expression('3*x').with('x', Integer.valueOf('100000')).eval());
 		System.assertEquals(300000, new RT_Expression('3*x').with('x', Long.valueOf('100000')).eval());
+	}
+
+	@isTest static void testReferencedVars() {
+		RT_Expression e = new RT_Expression('Foo__r.A__c + MAX(Foo__r.B__c, 0) == SQRT(C__c)');
+		Set<String> vars = e.getReferencedVariables();
+		System.assertEquals(3, vars.size());
+		System.assertEquals(true, vars.contains('FOO__R.A__C'));
+		System.assertEquals(true, vars.contains('FOO__R.B__C'));
+		System.assertEquals(true, vars.contains('C__C'));
 	}
 
 	@isTest static void testInvalidVariableType() {
