@@ -674,7 +674,7 @@
 		}
 		System.assertEquals('Unknown function \'invalid\' at position 5', err);
 	}
-
+	
 	@isTest static void testUndefinedVariable() {
 		System.assertEquals(true, new RT_Expression('a == null').evalBool());
 		System.assertEquals(0, new RT_Expression('a + b').eval());
@@ -754,7 +754,7 @@
 			System.assert(false, 'Expected an exception');
 		}
 		catch (Exception e) {
-			System.assertEquals('RT_Expression.IllegalStateException', e.getTypeName());
+			System.assert(e instanceof RT_Expression.IllegalStateException);
 		}
 	}
 	
@@ -1124,7 +1124,7 @@
 		System.assertEquals(300000, new RT_Expression('3*x').with('x', Integer.valueOf('100000')).eval());
 		System.assertEquals(300000, new RT_Expression('3*x').with('x', Long.valueOf('100000')).eval());
 	}
-
+	
 	@isTest static void testReferencedVars() {
 		RT_Expression e = new RT_Expression('Foo__r.A__c + MAX(Foo__r.B__c, 0) == SQRT(C__c)');
 		Set<String> vars = e.getReferencedVariables();
@@ -1133,7 +1133,7 @@
 		System.assertEquals(true, vars.contains('FOO__R.B__C'));
 		System.assertEquals(true, vars.contains('C__C'));
 	}
-
+	
 	@isTest static void testInvalidVariableType() {
 		Datetime value = Datetime.now();
 		try {
