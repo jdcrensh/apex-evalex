@@ -79,7 +79,7 @@ public class RT_Stack implements IStack {
 	 */
 	public RT_Stack(List<Object> stack) {
 		this.stack = stack;
-		elementCount = 0;
+		elementCount = stack.size();
 	}
 	
 	/**
@@ -108,7 +108,7 @@ public class RT_Stack implements IStack {
 		if (elementCount == 0) {
 			throw new EmptyStackException();
 		}
-		return stack.get(stack.size() - 1);
+		return stack.get(elementCount - 1);
 	}
 	
 	public Integer size() {
